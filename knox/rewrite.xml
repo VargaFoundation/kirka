@@ -1,0 +1,5 @@
+<rules>
+    <rule dir="IN" name="KIRKA/kirka/inbound" pattern="*://*:*/**/kirka/api/2.0/mlflow/{path=**}?{**}">
+        <rewrite template="{$serviceUrl[KIRKA]}/api/2.0/mlflow/{path=**}?{**}"/>
+    </rule>
+</rules>
