@@ -1,0 +1,102 @@
+package varga.kirka.controller;
+
+import varga.kirka.model.Run;
+import varga.kirka.service.RunService;
+import org.apache.hadoop.fs.FileStatus;
+import varga.kirka.service.ArtifactService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+import jakarta.servlet.http.HttpServletResponse;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+@RestController
+@RequestMapping("/api/2.0/mlflow/artifacts")
+public class ArtifactController {
+
+    @Autowired
+    private ArtifactService artifactService;
+
+    @Autowired
+    private RunService runService;
+
+    @GetMapping("/list")
+    public Map<String, Object> listArtifacts(@RequestParam(value = "run_id", required = true) String runId,
+                                            @RequestParam(value = "path", required = false) String path) throws IOException {
+        Run run = runService.getRun(runId);
+        if (run == null) {
+            throw new IllegalArgumentException("Run not found: " + runId);
+        }
+        
+        String baseUri = run.getArtifactUri();
+        String fullPath = baseUri;
+        if (path != null && !path.isEmpty()) {
+            fullPath = baseUri + (baseUri.endsWith("/") ? "" : "/") + path;
+        }
+        
+        List<FileStatus> statuses = artifactService.listArtifacts(fullPath);
+        
+        List<Map<String, Object>> files = statuses.stream().map(s -> {
+            Map<String, Object> map = new HashMap<>();
+            map.put("path", s.getPath().getName());
+            map.put("is_dir", s.isDirectory());
+            map.put("file_size", s.getLen());
+            return map;
+        }).collect(Collectors.toList());
+
+        return Map.of("files", files);
+    }
+
+    @PostMapping("/upload")
+    public Map<String, String> uploadArtifact(@RequestParam("run_id") String runId,
+                                             @RequestParam(value = "path", required = false) String path,
+                                             @RequestParam("file") MultipartFile file) throws IOException {
+        Run run = runService.getRun(runId);
+        if (run == null) {
+            throw new IllegalArgumentException("Run not found: " + runId);
+        }
+
+        String baseUri = run.getArtifactUri();
+        String fullPath = baseUri;
+        if (path != null && !path.isEmpty()) {
+            fullPath = baseUri + (baseUri.endsWith("/") ? "" : "/") + path;
+        }
+        
+        // S'assurer que le nom du fichier est inclus dans le chemin HDFS
+        String fileName = file.getOriginalFilename();
+        String hdfsPath = fullPath + (fullPath.endsWith("/") ? "" : "/") + fileName;
+
+        try (InputStream is = file.getInputStream()) {
+            artifactService.uploadArtifact(hdfsPath, is);
+        }
+
+        return Map.of("path", hdfsPath);
+    }
+
+    @GetMapping("/download")
+    public void downloadArtifact(@RequestParam("run_id") String runId,
+                                @RequestParam("path") String path,
+                                HttpServletResponse response) throws IOException {
+        Run run = runService.getRun(runId);
+        if (run == null) {
+            throw new IllegalArgumentException("Run not found: " + runId);
+        }
+
+        String baseUri = run.getArtifactUri();
+        String hdfsPath = baseUri + (baseUri.endsWith("/") ? "" : "/") + path;
+
+        response.setContentType("application/octet-stream");
+        response.setHeader("Content-Disposition", "attachment; filename=\"" + path.substring(path.lastIndexOf("/") + 1) + "\"");
+
+        try (OutputStream os = response.getOutputStream()) {
+            artifactService.downloadArtifact(hdfsPath, os);
+        }
+    }
+}
