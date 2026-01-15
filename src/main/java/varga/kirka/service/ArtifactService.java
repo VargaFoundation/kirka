@@ -30,4 +30,9 @@ public class ArtifactService {
         log.info("Downloading artifact from: {}", path);
         artifactRepository.downloadArtifact(path, outputStream);
     }
+
+    public void deleteArtifact(String path) throws IOException {
+        log.info("Deleting artifact at: {}", path);
+        artifactRepository.deleteArtifact(path);
+    }
 }

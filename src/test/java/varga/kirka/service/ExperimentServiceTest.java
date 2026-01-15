@@ -56,4 +56,21 @@ public class ExperimentServiceTest {
         
         assertTrue(results.isEmpty());
     }
+
+    @Test
+    public void testSearchExperimentsFilter() throws IOException {
+        Experiment exp1 = Experiment.builder().experimentId("1").name("exp1").lifecycleStage("active").build();
+        Experiment exp2 = Experiment.builder().experimentId("2").name("exp2").lifecycleStage("deleted").build();
+        when(experimentRepository.listExperiments()).thenReturn(List.of(exp1, exp2));
+
+        // Test view_type active_only
+        List<Experiment> active = experimentService.searchExperiments("active_only", null, null);
+        assertEquals(1, active.size());
+        assertEquals("exp1", active.get(0).getName());
+
+        // Test filter by name
+        List<Experiment> filtered = experimentService.searchExperiments(null, null, "name = 'exp2'");
+        assertEquals(1, filtered.size());
+        assertEquals("exp2", filtered.get(0).getName());
+    }
 }

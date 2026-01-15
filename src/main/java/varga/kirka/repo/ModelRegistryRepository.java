@@ -95,6 +95,9 @@ public class ModelRegistryRepository {
         byte[] name = result.getValue(CF_INFO, Bytes.toBytes("name"));
         byte[] version = result.getValue(CF_INFO, Bytes.toBytes("version"));
         byte[] creationTimestamp = result.getValue(CF_INFO, Bytes.toBytes("creation_timestamp"));
+        byte[] lastUpdatedTimestamp = result.getValue(CF_INFO, Bytes.toBytes("last_updated_timestamp"));
+        byte[] description = result.getValue(CF_INFO, Bytes.toBytes("description"));
+        byte[] userId = result.getValue(CF_INFO, Bytes.toBytes("user_id"));
         byte[] currentStage = result.getValue(CF_INFO, Bytes.toBytes("current_stage"));
         byte[] source = result.getValue(CF_INFO, Bytes.toBytes("source"));
         byte[] runId = result.getValue(CF_INFO, Bytes.toBytes("run_id"));
@@ -104,6 +107,9 @@ public class ModelRegistryRepository {
                 .name(name != null ? Bytes.toString(name) : null)
                 .version(version != null ? Bytes.toString(version) : null)
                 .creationTimestamp(creationTimestamp != null ? Bytes.toLong(creationTimestamp) : 0L)
+                .lastUpdatedTimestamp(lastUpdatedTimestamp != null ? Bytes.toLong(lastUpdatedTimestamp) : 0L)
+                .description(description != null ? Bytes.toString(description) : null)
+                .userId(userId != null ? Bytes.toString(userId) : null)
                 .currentStage(currentStage != null ? Bytes.toString(currentStage) : null)
                 .source(source != null ? Bytes.toString(source) : null)
                 .runId(runId != null ? Bytes.toString(runId) : null)
@@ -119,11 +125,16 @@ public class ModelRegistryRepository {
                     byte[] nameBytes = result.getValue(CF_INFO, Bytes.toBytes("name"));
                     byte[] creationTimestamp = result.getValue(CF_INFO, Bytes.toBytes("creation_timestamp"));
                     byte[] lastUpdatedTimestamp = result.getValue(CF_INFO, Bytes.toBytes("last_updated_timestamp"));
+                    byte[] description = result.getValue(CF_INFO, Bytes.toBytes("description"));
+                    
+                    String name = nameBytes != null ? Bytes.toString(nameBytes) : Bytes.toString(result.getRow());
                     
                     models.add(RegisteredModel.builder()
-                            .name(nameBytes != null ? Bytes.toString(nameBytes) : Bytes.toString(result.getRow()))
+                            .name(name)
                             .creationTimestamp(creationTimestamp != null ? Bytes.toLong(creationTimestamp) : 0L)
                             .lastUpdatedTimestamp(lastUpdatedTimestamp != null ? Bytes.toLong(lastUpdatedTimestamp) : 0L)
+                            .description(description != null ? Bytes.toString(description) : null)
+                            .latestVersions(getLatestVersions(name))
                             .build());
                 }
             }

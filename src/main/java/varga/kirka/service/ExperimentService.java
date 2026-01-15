@@ -62,7 +62,35 @@ public class ExperimentService {
         return experimentRepository.listExperiments();
     }
     public List<Experiment> searchExperiments(String viewType, Integer maxResults, String filter) throws IOException {
-        // Simple implementation: list all
-        return experimentRepository.listExperiments();
+        List<Experiment> all = experimentRepository.listExperiments();
+        
+        // Filtrage par lifecycle_stage
+        List<Experiment> filtered = all.stream()
+            .filter(e -> {
+                if ("active_only".equalsIgnoreCase(viewType) || viewType == null) {
+                    return "active".equalsIgnoreCase(e.getLifecycleStage());
+                } else if ("deleted_only".equalsIgnoreCase(viewType)) {
+                    return "deleted".equalsIgnoreCase(e.getLifecycleStage());
+                }
+                return true; // "all"
+            })
+            .collect(java.util.stream.Collectors.toList());
+
+        // Simulation de filtrage par nom (MLFlow supporte un langage de requête simple)
+        if (filter != null && !filter.isEmpty()) {
+            // Exemple simple: filter="name = 'my_exp'"
+            if (filter.contains("name =")) {
+                String targetName = filter.split("=")[1].trim().replace("'", "");
+                filtered = filtered.stream()
+                    .filter(e -> e.getName().equals(targetName))
+                    .collect(java.util.stream.Collectors.toList());
+            }
+        }
+
+        if (maxResults != null && maxResults > 0 && filtered.size() > maxResults) {
+            return filtered.subList(0, maxResults);
+        }
+        
+        return filtered;
     }
 }

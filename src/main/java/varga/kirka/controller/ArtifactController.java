@@ -101,4 +101,22 @@ public class ArtifactController {
             artifactService.downloadArtifact(hdfsPath, os);
         }
     }
+
+    @PostMapping("/delete")
+    public Map<String, Object> deleteArtifact(@RequestBody Map<String, String> request) throws IOException {
+        String runId = request.get("run_id");
+        String path = request.get("path");
+        log.info("REST request to delete artifact for run: {}, path: {}", runId, path);
+        
+        Run run = runService.getRun(runId);
+        if (run == null) {
+            throw new IllegalArgumentException("Run not found: " + runId);
+        }
+
+        String baseUri = run.getArtifactUri();
+        String hdfsPath = baseUri + (baseUri.endsWith("/") ? "" : "/") + path;
+        
+        artifactService.deleteArtifact(hdfsPath);
+        return Map.of();
+    }
 }

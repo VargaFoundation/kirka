@@ -14,39 +14,15 @@ import org.springframework.context.annotation.Primary;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
 
 @SpringBootTest(properties = {
     "spring.main.allow-bean-definition-overriding=true",
-    "hadoop.hdfs.uri=file:///",
-    "hbase.zookeeper.quorum=localhost",
-    "hbase.zookeeper.property.clientPort=2181",
     "security.kerberos.enabled=false"
 })
-@Import({ArtifactRepositoryIntegrationTest.MockHBaseConfig.class, ArtifactRepositoryIntegrationTest.MockHdfsConfig.class})
-public class ArtifactRepositoryIntegrationTest {
-
-    @TestConfiguration
-    static class MockHdfsConfig {
-        @Bean("fileSystem")
-        @Primary
-        public FileSystem testFileSystem() throws IOException {
-            FileSystem fs = mock(FileSystem.class);
-            when(fs.exists(any(Path.class))).thenReturn(true);
-            return fs;
-        }
-    }
-
-    @TestConfiguration
-    static class MockHBaseConfig {
-        @Bean("hbaseConnection")
-        @Primary
-        public Connection testHbaseConnection() throws IOException {
-            return mock(Connection.class);
-        }
-    }
+@Import(AbstractHBaseIntegrationTest.HBaseTestConfig.class)
+public class ArtifactRepositoryIntegrationTest extends AbstractHBaseIntegrationTest {
 
     @Autowired
     private ArtifactRepository artifactRepository;
@@ -55,16 +31,21 @@ public class ArtifactRepositoryIntegrationTest {
     private FileSystem fileSystem;
 
     @Test
-    public void testExists() throws IOException {
+    public void testUploadAndExists() throws IOException {
         String path = "/tmp/test.txt";
+        byte[] content = "Hello HBase".getBytes();
+        artifactRepository.uploadArtifact(path, new ByteArrayInputStream(content));
+        
         assertTrue(artifactRepository.exists(path));
-        verify(fileSystem).exists(new Path(path));
     }
 
     @Test
     public void testDelete() throws IOException {
         String path = "/tmp/delete.txt";
+        artifactRepository.uploadArtifact(path, new ByteArrayInputStream("to delete".getBytes()));
+        assertTrue(artifactRepository.exists(path));
+        
         artifactRepository.deleteArtifact(path);
-        verify(fileSystem).delete(new Path(path), true);
+        assertFalse(artifactRepository.exists(path));
     }
 }

@@ -64,7 +64,21 @@ public class RunService {
     }
 
     public java.util.List<Run> searchRuns(java.util.List<String> experimentIds, String filter, String runViewType) throws IOException {
-        return runRepository.searchRuns(experimentIds, filter, runViewType);
+        java.util.List<Run> runs = runRepository.searchRuns(experimentIds, filter, runViewType);
+        
+        // Filtrage supplémentaire côté service si nécessaire
+        if (runViewType != null) {
+            runs = runs.stream().filter(r -> {
+                if ("active_only".equalsIgnoreCase(runViewType)) {
+                    // Pour les runs, active_only est souvent le défaut. 
+                    // Supposons que deleteRun marque le status comme 'DELETED' ou utilise lifecycle_stage (non présent dans le modèle Run actuel)
+                    return !"DELETED".equalsIgnoreCase(r.getStatus());
+                }
+                return true;
+            }).collect(java.util.stream.Collectors.toList());
+        }
+
+        return runs;
     }
 
     public java.util.List<varga.kirka.model.Metric> getMetricHistory(String runId, String metricKey) throws IOException {

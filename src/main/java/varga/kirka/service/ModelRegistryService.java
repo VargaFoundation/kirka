@@ -54,8 +54,17 @@ public class ModelRegistryService {
         return version;
     }
     public List<RegisteredModel> searchRegisteredModels(String filter) throws IOException {
-        // Basic implementation: list all and filter if needed
-        return modelRegistryRepository.listRegisteredModels();
+        List<RegisteredModel> all = modelRegistryRepository.listRegisteredModels();
+        if (filter != null && !filter.isEmpty()) {
+            // MLFlow filter for models usually looks like "name LIKE 'my_model%'"
+            if (filter.contains("name LIKE")) {
+                String pattern = filter.split("LIKE")[1].trim().replace("'", "").replace("%", ".*");
+                return all.stream()
+                    .filter(m -> m.getName().matches(pattern))
+                    .collect(java.util.stream.Collectors.toList());
+            }
+        }
+        return all;
     }
 
     public void updateRegisteredModel(String name, String description) throws IOException {
