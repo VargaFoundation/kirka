@@ -1,5 +1,6 @@
 package varga.kirka.controller;
 
+import lombok.extern.slf4j.Slf4j;
 import varga.kirka.model.ModelVersion;
 import varga.kirka.model.RegisteredModel;
 import varga.kirka.service.ModelRegistryService;
@@ -9,6 +10,7 @@ import org.springframework.web.bind.annotation.*;
 import java.io.IOException;
 import java.util.Map;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/2.0/mlflow")
 public class ModelRegistryController {
@@ -19,6 +21,7 @@ public class ModelRegistryController {
     @PostMapping("/registered-models/create")
     public Map<String, Object> createRegisteredModel(@RequestBody Map<String, String> request) throws IOException {
         String name = request.get("name");
+        log.info("REST request to create registered model: {}", name);
         modelRegistryService.createRegisteredModel(name);
         return Map.of("registered_model", modelRegistryService.getRegisteredModel(name));
     }

@@ -1,5 +1,6 @@
 package varga.kirka.controller;
 
+import lombok.extern.slf4j.Slf4j;
 import varga.kirka.model.Experiment;
 import varga.kirka.service.ExperimentService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -9,6 +10,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/2.0/mlflow/experiments")
 public class ExperimentController {
@@ -19,6 +21,7 @@ public class ExperimentController {
     @PostMapping("/create")
     public Map<String, String> createExperiment(@RequestBody Map<String, Object> request) throws IOException {
         String name = (String) request.get("name");
+        log.info("REST request to create experiment: {}", name);
         String artifactLocation = (String) request.get("artifact_location");
         java.util.List<Map<String, String>> tags = (java.util.List<Map<String, String>>) request.get("tags");
         java.util.Map<String, String> tagsMap = new java.util.HashMap<>();

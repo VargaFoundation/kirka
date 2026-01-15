@@ -1,5 +1,6 @@
 package varga.kirka.service;
 
+import lombok.extern.slf4j.Slf4j;
 import varga.kirka.repo.ExperimentRepository;
 import varga.kirka.model.Experiment;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -9,6 +10,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Service
 public class ExperimentService {
 
@@ -16,6 +18,7 @@ public class ExperimentService {
     private ExperimentRepository experimentRepository;
 
     public String createExperiment(String name, String artifactLocation, java.util.Map<String, String> tags) throws IOException {
+        log.info("Creating experiment with name: {}", name);
         String experimentId = UUID.randomUUID().toString();
         Experiment experiment = Experiment.builder()
                 .experimentId(experimentId)
@@ -31,6 +34,7 @@ public class ExperimentService {
     }
 
     public Experiment getExperiment(String experimentId) throws IOException {
+        log.debug("Fetching experiment: {}", experimentId);
         return experimentRepository.getExperiment(experimentId);
     }
 

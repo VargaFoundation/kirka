@@ -1,5 +1,5 @@
 package varga.kirka.repo;
-
+import lombok.extern.slf4j.Slf4j;
 import varga.kirka.model.Run;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.*;
@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 
+@Slf4j
 @Repository
 public class RunRepository {
 
@@ -34,6 +35,7 @@ public class RunRepository {
     private Connection connection;
 
     public void createRun(Run run) throws IOException {
+        log.info("HBase: creating run {}", run.getRunId());
         try (Table table = connection.getTable(TableName.valueOf(TABLE_NAME))) {
             Put put = new Put(Bytes.toBytes(run.getRunId()));
             put.addColumn(CF_INFO, COL_EXPERIMENT_ID, Bytes.toBytes(run.getExperimentId()));
@@ -166,13 +168,19 @@ public class RunRepository {
         Map<String, Double> metrics = extractMetrics(result);
         Map<String, String> tags = extractMap(result, CF_TAGS);
 
+        byte[] experimentId = result.getValue(CF_INFO, COL_EXPERIMENT_ID);
+        byte[] status = result.getValue(CF_INFO, COL_STATUS);
+        byte[] startTime = result.getValue(CF_INFO, COL_START_TIME);
+        byte[] endTime = result.getValue(CF_INFO, COL_END_TIME);
+        byte[] artifactUri = result.getValue(CF_INFO, COL_ARTIFACT_URI);
+
         return Run.builder()
                 .runId(runId)
-                .experimentId(Bytes.toString(result.getValue(CF_INFO, COL_EXPERIMENT_ID)))
-                .status(Bytes.toString(result.getValue(CF_INFO, COL_STATUS)))
-                .startTime(Bytes.toLong(result.getValue(CF_INFO, COL_START_TIME)))
-                .endTime(result.containsColumn(CF_INFO, COL_END_TIME) ? Bytes.toLong(result.getValue(CF_INFO, COL_END_TIME)) : 0L)
-                .artifactUri(Bytes.toString(result.getValue(CF_INFO, COL_ARTIFACT_URI)))
+                .experimentId(experimentId != null ? Bytes.toString(experimentId) : null)
+                .status(status != null ? Bytes.toString(status) : null)
+                .startTime(startTime != null ? Bytes.toLong(startTime) : 0L)
+                .endTime(endTime != null ? Bytes.toLong(endTime) : 0L)
+                .artifactUri(artifactUri != null ? Bytes.toString(artifactUri) : null)
                 .parameters(params)
                 .metrics(metrics)
                 .tags(tags)

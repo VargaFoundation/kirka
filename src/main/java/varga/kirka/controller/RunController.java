@@ -1,5 +1,6 @@
 package varga.kirka.controller;
 
+import lombok.extern.slf4j.Slf4j;
 import varga.kirka.model.Run;
 import varga.kirka.service.RunService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -8,6 +9,7 @@ import org.springframework.web.bind.annotation.*;
 import java.io.IOException;
 import java.util.Map;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/2.0/mlflow/runs")
 public class RunController {
@@ -18,6 +20,7 @@ public class RunController {
     @PostMapping("/create")
     public Map<String, Object> createRun(@RequestBody Map<String, Object> request) throws IOException {
         String experimentId = (String) request.get("experiment_id");
+        log.info("REST request to create run for experiment: {}", experimentId);
         String userId = (String) request.get("user_id");
         long startTime = request.containsKey("start_time") ? ((Number) request.get("start_time")).longValue() : System.currentTimeMillis();
         

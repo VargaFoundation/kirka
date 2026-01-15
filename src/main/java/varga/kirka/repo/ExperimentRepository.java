@@ -1,5 +1,5 @@
 package varga.kirka.repo;
-
+import lombok.extern.slf4j.Slf4j;
 import varga.kirka.model.Experiment;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.*;
@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+@Slf4j
 @Repository
 public class ExperimentRepository {
 
@@ -27,6 +28,7 @@ public class ExperimentRepository {
     private Connection connection;
 
     public void createExperiment(Experiment experiment) throws IOException {
+        log.info("HBase: creating experiment {} ({})", experiment.getName(), experiment.getExperimentId());
         try (Table table = connection.getTable(TableName.valueOf(TABLE_NAME))) {
             Put put = new Put(Bytes.toBytes(experiment.getExperimentId()));
             put.addColumn(CF_INFO, COL_NAME, Bytes.toBytes(experiment.getName()));

@@ -1,5 +1,6 @@
 package varga.kirka.service;
 
+import lombok.extern.slf4j.Slf4j;
 import varga.kirka.model.ModelVersion;
 import varga.kirka.model.RegisteredModel;
 import varga.kirka.repo.ModelRegistryRepository;
@@ -9,6 +10,7 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.util.List;
 
+@Slf4j
 @Service
 public class ModelRegistryService {
 
@@ -16,18 +18,22 @@ public class ModelRegistryService {
     private ModelRegistryRepository modelRegistryRepository;
 
     public void createRegisteredModel(String name) throws IOException {
+        log.info("Creating registered model: {}", name);
         modelRegistryRepository.createRegisteredModel(name);
     }
 
     public RegisteredModel getRegisteredModel(String name) throws IOException {
+        log.debug("Fetching registered model: {}", name);
         return modelRegistryRepository.getRegisteredModel(name);
     }
 
     public List<RegisteredModel> listRegisteredModels() throws IOException {
+        log.debug("Listing registered models");
         return modelRegistryRepository.listRegisteredModels();
     }
 
     public ModelVersion createModelVersion(String name, String source, String runId) throws IOException {
+        log.info("Creating model version for: {}, source: {}, runId: {}", name, source, runId);
         // Simple versioning logic: get existing and increment
         RegisteredModel model = modelRegistryRepository.getRegisteredModel(name);
         int versionNum = 1;

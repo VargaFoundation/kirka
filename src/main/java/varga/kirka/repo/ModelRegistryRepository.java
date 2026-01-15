@@ -1,5 +1,5 @@
 package varga.kirka.repo;
-
+import lombok.extern.slf4j.Slf4j;
 import varga.kirka.model.RegisteredModel;
 import varga.kirka.model.ModelVersion;
 import org.apache.hadoop.hbase.TableName;
@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+@Slf4j
 @Repository
 public class ModelRegistryRepository {
 
@@ -24,6 +25,7 @@ public class ModelRegistryRepository {
     private Connection connection;
 
     public void createRegisteredModel(String name) throws IOException {
+        log.info("HBase: creating registered model {}", name);
         try (Table table = connection.getTable(TableName.valueOf(MODELS_TABLE))) {
             Put put = new Put(Bytes.toBytes(name));
             put.addColumn(CF_INFO, Bytes.toBytes("name"), Bytes.toBytes(name));
@@ -39,10 +41,14 @@ public class ModelRegistryRepository {
             Result result = table.get(get);
             if (result.isEmpty()) return null;
             
+            byte[] nameBytes = result.getValue(CF_INFO, Bytes.toBytes("name"));
+            byte[] creationTimestamp = result.getValue(CF_INFO, Bytes.toBytes("creation_timestamp"));
+            byte[] lastUpdatedTimestamp = result.getValue(CF_INFO, Bytes.toBytes("last_updated_timestamp"));
+
             return RegisteredModel.builder()
-                    .name(Bytes.toString(result.getValue(CF_INFO, Bytes.toBytes("name"))))
-                    .creationTimestamp(Bytes.toLong(result.getValue(CF_INFO, Bytes.toBytes("creation_timestamp"))))
-                    .lastUpdatedTimestamp(Bytes.toLong(result.getValue(CF_INFO, Bytes.toBytes("last_updated_timestamp"))))
+                    .name(nameBytes != null ? Bytes.toString(nameBytes) : name)
+                    .creationTimestamp(creationTimestamp != null ? Bytes.toLong(creationTimestamp) : 0L)
+                    .lastUpdatedTimestamp(lastUpdatedTimestamp != null ? Bytes.toLong(lastUpdatedTimestamp) : 0L)
                     .latestVersions(getLatestVersions(name))
                     .build();
         }
@@ -86,14 +92,22 @@ public class ModelRegistryRepository {
     }
 
     private ModelVersion mapResultToModelVersion(Result result) {
+        byte[] name = result.getValue(CF_INFO, Bytes.toBytes("name"));
+        byte[] version = result.getValue(CF_INFO, Bytes.toBytes("version"));
+        byte[] creationTimestamp = result.getValue(CF_INFO, Bytes.toBytes("creation_timestamp"));
+        byte[] currentStage = result.getValue(CF_INFO, Bytes.toBytes("current_stage"));
+        byte[] source = result.getValue(CF_INFO, Bytes.toBytes("source"));
+        byte[] runId = result.getValue(CF_INFO, Bytes.toBytes("run_id"));
+        byte[] status = result.getValue(CF_INFO, Bytes.toBytes("status"));
+
         return ModelVersion.builder()
-                .name(Bytes.toString(result.getValue(CF_INFO, Bytes.toBytes("name"))))
-                .version(Bytes.toString(result.getValue(CF_INFO, Bytes.toBytes("version"))))
-                .creationTimestamp(Bytes.toLong(result.getValue(CF_INFO, Bytes.toBytes("creation_timestamp"))))
-                .currentStage(Bytes.toString(result.getValue(CF_INFO, Bytes.toBytes("current_stage"))))
-                .source(Bytes.toString(result.getValue(CF_INFO, Bytes.toBytes("source"))))
-                .runId(Bytes.toString(result.getValue(CF_INFO, Bytes.toBytes("run_id"))))
-                .status(Bytes.toString(result.getValue(CF_INFO, Bytes.toBytes("status"))))
+                .name(name != null ? Bytes.toString(name) : null)
+                .version(version != null ? Bytes.toString(version) : null)
+                .creationTimestamp(creationTimestamp != null ? Bytes.toLong(creationTimestamp) : 0L)
+                .currentStage(currentStage != null ? Bytes.toString(currentStage) : null)
+                .source(source != null ? Bytes.toString(source) : null)
+                .runId(runId != null ? Bytes.toString(runId) : null)
+                .status(status != null ? Bytes.toString(status) : null)
                 .build();
     }
     
@@ -102,11 +116,14 @@ public class ModelRegistryRepository {
         try (Table table = connection.getTable(TableName.valueOf(MODELS_TABLE))) {
             try (ResultScanner scanner = table.getScanner(new Scan())) {
                 for (Result result : scanner) {
-                    String name = Bytes.toString(result.getValue(CF_INFO, Bytes.toBytes("name")));
+                    byte[] nameBytes = result.getValue(CF_INFO, Bytes.toBytes("name"));
+                    byte[] creationTimestamp = result.getValue(CF_INFO, Bytes.toBytes("creation_timestamp"));
+                    byte[] lastUpdatedTimestamp = result.getValue(CF_INFO, Bytes.toBytes("last_updated_timestamp"));
+                    
                     models.add(RegisteredModel.builder()
-                            .name(name)
-                            .creationTimestamp(Bytes.toLong(result.getValue(CF_INFO, Bytes.toBytes("creation_timestamp"))))
-                            .lastUpdatedTimestamp(Bytes.toLong(result.getValue(CF_INFO, Bytes.toBytes("last_updated_timestamp"))))
+                            .name(nameBytes != null ? Bytes.toString(nameBytes) : Bytes.toString(result.getRow()))
+                            .creationTimestamp(creationTimestamp != null ? Bytes.toLong(creationTimestamp) : 0L)
+                            .lastUpdatedTimestamp(lastUpdatedTimestamp != null ? Bytes.toLong(lastUpdatedTimestamp) : 0L)
                             .build());
                 }
             }

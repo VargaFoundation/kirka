@@ -1,5 +1,6 @@
 package varga.kirka.service;
 
+import lombok.extern.slf4j.Slf4j;
 import varga.kirka.model.Run;
 import varga.kirka.repo.RunRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -8,6 +9,7 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.util.UUID;
 
+@Slf4j
 @Service
 public class RunService {
 
@@ -15,6 +17,7 @@ public class RunService {
     private RunRepository runRepository;
 
     public Run createRun(String experimentId, String userId, long startTime, java.util.Map<String, String> tags) throws IOException {
+        log.info("Creating run for experimentId: {}, userId: {}", experimentId, userId);
         String runId = UUID.randomUUID().toString();
         Run run = Run.builder()
                 .runId(runId)
@@ -29,10 +32,12 @@ public class RunService {
     }
 
     public Run getRun(String runId) throws IOException {
+        log.debug("Fetching run: {}", runId);
         return runRepository.getRun(runId);
     }
 
     public void updateRun(String runId, String status, long endTime) throws IOException {
+        log.info("Updating run: {} with status: {} and endTime: {}", runId, status, endTime);
         runRepository.updateRun(runId, status, endTime);
     }
 

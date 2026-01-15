@@ -1,5 +1,5 @@
 package varga.kirka.repo;
-
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.*;
 import org.apache.hadoop.io.IOUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,6 +11,7 @@ import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 
+@Slf4j
 @Repository
 public class ArtifactRepository {
 

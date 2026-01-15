@@ -1,5 +1,5 @@
 package varga.kirka.controller;
-
+import lombok.extern.slf4j.Slf4j;
 import varga.kirka.model.Run;
 import varga.kirka.service.RunService;
 import org.apache.hadoop.fs.FileStatus;
@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/2.0/mlflow/artifacts")
 public class ArtifactController {
@@ -30,6 +31,7 @@ public class ArtifactController {
     @GetMapping("/list")
     public Map<String, Object> listArtifacts(@RequestParam(value = "run_id", required = true) String runId,
                                             @RequestParam(value = "path", required = false) String path) throws IOException {
+        log.debug("REST request to list artifacts for run: {}, path: {}", runId, path);
         Run run = runService.getRun(runId);
         if (run == null) {
             throw new IllegalArgumentException("Run not found: " + runId);
