@@ -91,4 +91,39 @@ public class ModelRegistryController {
         String archiveExistingVersions = request.get("archive_existing_versions");
         return Map.of("model_version", modelRegistryService.transitionModelVersionStage(name, version, stage, Boolean.parseBoolean(archiveExistingVersions)));
     }
+    @PostMapping("/registered-models/set-tag")
+    public Map<String, Object> setRegisteredModelTag(@RequestBody Map<String, String> request) throws IOException {
+        String name = request.get("name");
+        String key = request.get("key");
+        String value = request.get("value");
+        modelRegistryService.setRegisteredModelTag(name, key, value);
+        return Map.of();
+    }
+
+    @PostMapping("/registered-models/delete-tag")
+    public Map<String, Object> deleteRegisteredModelTag(@RequestBody Map<String, String> request) throws IOException {
+        String name = request.get("name");
+        String key = request.get("key");
+        modelRegistryService.deleteRegisteredModelTag(name, key);
+        return Map.of();
+    }
+
+    @PostMapping("/model-versions/set-tag")
+    public Map<String, Object> setModelVersionTag(@RequestBody Map<String, String> request) throws IOException {
+        String name = request.get("name");
+        String version = request.get("version");
+        String key = request.get("key");
+        String value = request.get("value");
+        modelRegistryService.setModelVersionTag(name, version, key, value);
+        return Map.of();
+    }
+
+    @PostMapping("/model-versions/delete-tag")
+    public Map<String, Object> deleteModelVersionTag(@RequestBody Map<String, String> request) throws IOException {
+        String name = request.get("name");
+        String version = request.get("version");
+        String key = request.get("key");
+        modelRegistryService.deleteModelVersionTag(name, version, key);
+        return Map.of();
+    }
 }

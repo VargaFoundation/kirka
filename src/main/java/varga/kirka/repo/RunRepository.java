@@ -41,6 +41,13 @@ public class RunRepository {
             put.addColumn(CF_INFO, COL_START_TIME, Bytes.toBytes(run.getStartTime()));
             put.addColumn(CF_INFO, COL_ARTIFACT_URI, Bytes.toBytes(run.getArtifactUri()));
             put.addColumn(CF_INFO, Bytes.toBytes("lifecycle_stage"), Bytes.toBytes("active"));
+            
+            if (run.getTags() != null) {
+                for (Map.Entry<String, String> entry : run.getTags().entrySet()) {
+                    put.addColumn(CF_TAGS, Bytes.toBytes(entry.getKey()), Bytes.toBytes(entry.getValue()));
+                }
+            }
+            
             table.put(put);
         }
     }

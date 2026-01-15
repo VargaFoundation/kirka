@@ -15,7 +15,7 @@ public class ExperimentService {
     @Autowired
     private ExperimentRepository experimentRepository;
 
-    public String createExperiment(String name, String artifactLocation) throws IOException {
+    public String createExperiment(String name, String artifactLocation, java.util.Map<String, String> tags) throws IOException {
         String experimentId = UUID.randomUUID().toString();
         Experiment experiment = Experiment.builder()
                 .experimentId(experimentId)
@@ -24,6 +24,7 @@ public class ExperimentService {
                 .lifecycleStage("active")
                 .creationTime(System.currentTimeMillis())
                 .lastUpdateTime(System.currentTimeMillis())
+                .tags(tags)
                 .build();
         experimentRepository.createExperiment(experiment);
         return experimentId;

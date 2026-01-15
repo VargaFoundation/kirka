@@ -30,7 +30,7 @@ public class ExperimentServiceTest {
         String name = "test-experiment";
         String artifactLocation = "hdfs:///tmp";
         
-        String id = experimentService.createExperiment(name, artifactLocation);
+        String id = experimentService.createExperiment(name, artifactLocation, null);
         
         assertNotNull(id);
         verify(experimentRepository, times(1)).createExperiment(any(Experiment.class));

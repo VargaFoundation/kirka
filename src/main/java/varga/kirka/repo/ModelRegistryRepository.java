@@ -170,4 +170,36 @@ public class ModelRegistryRepository {
             table.put(put);
         }
     }
+
+    public void setRegisteredModelTag(String name, String key, String value) throws IOException {
+        try (Table table = connection.getTable(TableName.valueOf(MODELS_TABLE))) {
+            Put put = new Put(Bytes.toBytes(name));
+            put.addColumn(Bytes.toBytes("tags"), Bytes.toBytes(key), Bytes.toBytes(value));
+            table.put(put);
+        }
+    }
+
+    public void deleteRegisteredModelTag(String name, String key) throws IOException {
+        try (Table table = connection.getTable(TableName.valueOf(MODELS_TABLE))) {
+            Delete delete = new Delete(Bytes.toBytes(name));
+            delete.addColumns(Bytes.toBytes("tags"), Bytes.toBytes(key));
+            table.delete(delete);
+        }
+    }
+
+    public void setModelVersionTag(String name, String version, String key, String value) throws IOException {
+        try (Table table = connection.getTable(TableName.valueOf(VERSIONS_TABLE))) {
+            Put put = new Put(Bytes.toBytes(name + "_" + version));
+            put.addColumn(Bytes.toBytes("tags"), Bytes.toBytes(key), Bytes.toBytes(value));
+            table.put(put);
+        }
+    }
+
+    public void deleteModelVersionTag(String name, String version, String key) throws IOException {
+        try (Table table = connection.getTable(TableName.valueOf(VERSIONS_TABLE))) {
+            Delete delete = new Delete(Bytes.toBytes(name + "_" + version));
+            delete.addColumns(Bytes.toBytes("tags"), Bytes.toBytes(key));
+            table.delete(delete);
+        }
+    }
 }

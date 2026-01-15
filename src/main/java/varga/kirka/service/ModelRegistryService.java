@@ -84,4 +84,20 @@ public class ModelRegistryService {
         modelRegistryRepository.updateModelVersionStage(name, version, stage);
         return modelRegistryRepository.getModelVersion(name, version);
     }
+
+    public void setRegisteredModelTag(String name, String key, String value) throws IOException {
+        modelRegistryRepository.setRegisteredModelTag(name, key, value);
+    }
+
+    public void deleteRegisteredModelTag(String name, String key) throws IOException {
+        modelRegistryRepository.deleteRegisteredModelTag(name, key);
+    }
+
+    public void setModelVersionTag(String name, String version, String key, String value) throws IOException {
+        modelRegistryRepository.setModelVersionTag(name, version, key, value);
+    }
+
+    public void deleteModelVersionTag(String name, String version, String key) throws IOException {
+        modelRegistryRepository.deleteModelVersionTag(name, version, key);
+    }
 }

@@ -9,9 +9,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import varga.kirka.model.Experiment;
 import varga.kirka.service.ExperimentService;
 
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -34,5 +36,26 @@ public class ExperimentControllerTest {
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.experiment.experimentId").value("123"));
+    }
+
+    @Test
+    public void testCreateExperiment() throws Exception {
+        when(experimentService.createExperiment(anyString(), anyString(), anyMap())).thenReturn("exp-1");
+        
+        mockMvc.perform(post("/api/2.0/mlflow/experiments/create")
+                .content("{\"name\": \"test-exp\", \"artifact_location\": \"hdfs:///tmp\"}")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.experiment_id").value("exp-1"));
+    }
+
+    @Test
+    public void testListExperiments() throws Exception {
+        when(experimentService.listExperiments()).thenReturn(java.util.List.of());
+        
+        mockMvc.perform(get("/api/2.0/mlflow/experiments/list")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.experiments").isArray());
     }
 }

@@ -20,7 +20,16 @@ public class RunController {
         String experimentId = (String) request.get("experiment_id");
         String userId = (String) request.get("user_id");
         long startTime = request.containsKey("start_time") ? ((Number) request.get("start_time")).longValue() : System.currentTimeMillis();
-        Run run = runService.createRun(experimentId, userId, startTime, null);
+        
+        java.util.List<Map<String, String>> tags = (java.util.List<Map<String, String>>) request.get("tags");
+        java.util.Map<String, String> tagsMap = new java.util.HashMap<>();
+        if (tags != null) {
+            for (Map<String, String> tag : tags) {
+                tagsMap.put(tag.get("key"), tag.get("value"));
+            }
+        }
+
+        Run run = runService.createRun(experimentId, userId, startTime, tagsMap);
         return Map.of("run", run);
     }
 

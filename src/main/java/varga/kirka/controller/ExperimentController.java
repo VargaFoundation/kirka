@@ -17,10 +17,17 @@ public class ExperimentController {
     private ExperimentService experimentService;
 
     @PostMapping("/create")
-    public Map<String, String> createExperiment(@RequestBody Map<String, String> request) throws IOException {
-        String name = request.get("name");
-        String artifactLocation = request.get("artifact_location");
-        String id = experimentService.createExperiment(name, artifactLocation);
+    public Map<String, String> createExperiment(@RequestBody Map<String, Object> request) throws IOException {
+        String name = (String) request.get("name");
+        String artifactLocation = (String) request.get("artifact_location");
+        java.util.List<Map<String, String>> tags = (java.util.List<Map<String, String>>) request.get("tags");
+        java.util.Map<String, String> tagsMap = new java.util.HashMap<>();
+        if (tags != null) {
+            for (Map<String, String> tag : tags) {
+                tagsMap.put(tag.get("key"), tag.get("value"));
+            }
+        }
+        String id = experimentService.createExperiment(name, artifactLocation, tagsMap);
         return Map.of("experiment_id", id);
     }
 
@@ -58,10 +65,17 @@ public class ExperimentController {
         return Map.of();
     }
 
+    @PostMapping("/set-tag")
+    public Map<String, Object> setTag(@RequestBody Map<String, String> request) throws IOException {
+        experimentService.setExperimentTag(request.get("experiment_id"), request.get("key"), request.get("value"));
+        return Map.of();
+    }
+
     @GetMapping("/list")
     public Map<String, List<Experiment>> listExperiments() throws IOException {
         return Map.of("experiments", experimentService.listExperiments());
     }
+
     @GetMapping("/search")
     public Map<String, Object> searchExperiments(@RequestParam(value = "view_type", required = false) String viewType,
                                                 @RequestParam(value = "max_results", required = false) Integer maxResults,

@@ -14,7 +14,7 @@ public class RunService {
     @Autowired
     private RunRepository runRepository;
 
-    public Run createRun(String experimentId, String userId, long startTime, String tags) throws IOException {
+    public Run createRun(String experimentId, String userId, long startTime, java.util.Map<String, String> tags) throws IOException {
         String runId = UUID.randomUUID().toString();
         Run run = Run.builder()
                 .runId(runId)
@@ -22,6 +22,7 @@ public class RunService {
                 .status("RUNNING")
                 .startTime(startTime)
                 .artifactUri("hdfs:///mlflow/artifacts/" + experimentId + "/" + runId)
+                .tags(tags)
                 .build();
         runRepository.createRun(run);
         return run;

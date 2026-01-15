@@ -21,6 +21,7 @@ public class ExperimentRepository {
     private static final byte[] COL_LIFECYCLE_STAGE = Bytes.toBytes("lifecycle_stage");
     private static final byte[] COL_CREATION_TIME = Bytes.toBytes("creation_time");
     private static final byte[] COL_LAST_UPDATE_TIME = Bytes.toBytes("last_update_time");
+    private static final byte[] CF_TAGS = Bytes.toBytes("tags");
 
     @Autowired
     private Connection connection;
@@ -33,6 +34,13 @@ public class ExperimentRepository {
             put.addColumn(CF_INFO, COL_LIFECYCLE_STAGE, Bytes.toBytes(experiment.getLifecycleStage()));
             put.addColumn(CF_INFO, COL_CREATION_TIME, Bytes.toBytes(experiment.getCreationTime()));
             put.addColumn(CF_INFO, COL_LAST_UPDATE_TIME, Bytes.toBytes(experiment.getLastUpdateTime()));
+            
+            if (experiment.getTags() != null) {
+                for (java.util.Map.Entry<String, String> entry : experiment.getTags().entrySet()) {
+                    put.addColumn(CF_TAGS, Bytes.toBytes(entry.getKey()), Bytes.toBytes(entry.getValue()));
+                }
+            }
+            
             table.put(put);
         }
     }
@@ -100,11 +108,20 @@ public class ExperimentRepository {
     public void setExperimentTag(String experimentId, String key, String value) throws IOException {
         try (Table table = connection.getTable(TableName.valueOf(TABLE_NAME))) {
             Put put = new Put(Bytes.toBytes(experimentId));
-            // On peut utiliser une famille de colonnes dédiée pour les tags d'expériences
-            byte[] CF_TAGS = Bytes.toBytes("tags");
             put.addColumn(CF_TAGS, Bytes.toBytes(key), Bytes.toBytes(value));
             table.put(put);
         }
+    }
+
+    private java.util.Map<String, String> extractTags(Result result) {
+        java.util.Map<String, String> tags = new java.util.HashMap<>();
+        java.util.NavigableMap<byte[], byte[]> map = result.getFamilyMap(CF_TAGS);
+        if (map != null) {
+            for (java.util.Map.Entry<byte[], byte[]> entry : map.entrySet()) {
+                tags.put(Bytes.toString(entry.getKey()), Bytes.toString(entry.getValue()));
+            }
+        }
+        return tags;
     }
 
     private Experiment mapResultToExperiment(Result result) {
@@ -115,6 +132,7 @@ public class ExperimentRepository {
                 .lifecycleStage(Bytes.toString(result.getValue(CF_INFO, COL_LIFECYCLE_STAGE)))
                 .creationTime(Bytes.toLong(result.getValue(CF_INFO, COL_CREATION_TIME)))
                 .lastUpdateTime(Bytes.toLong(result.getValue(CF_INFO, COL_LAST_UPDATE_TIME)))
+                .tags(extractTags(result))
                 .build();
     }
 }

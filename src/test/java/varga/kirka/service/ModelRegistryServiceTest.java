@@ -43,4 +43,18 @@ public class ModelRegistryServiceTest {
         assertEquals("None", version.getCurrentStage());
         verify(modelRegistryRepository, times(1)).createModelVersion(any(ModelVersion.class));
     }
+
+    @Test
+    public void testTransitionModelVersionStage() throws IOException {
+        String name = "test-model";
+        String version = "1";
+        ModelVersion mvProduction = ModelVersion.builder().name(name).version(version).currentStage("Production").build();
+        
+        when(modelRegistryRepository.getModelVersion(name, version)).thenReturn(mvProduction);
+
+        ModelVersion result = modelRegistryService.transitionModelVersionStage(name, version, "Production", false);
+        
+        assertEquals("Production", result.getCurrentStage());
+        verify(modelRegistryRepository).updateModelVersionStage(name, version, "Production");
+    }
 }
