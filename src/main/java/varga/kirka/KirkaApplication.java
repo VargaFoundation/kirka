@@ -8,7 +8,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 @SpringBootApplication
 public class KirkaApplication {
     public static void main(String[] args) {
-        log.info("Starting Kirka Application...");
+        // log.info("Starting Kirka Application...");
         SpringApplication.run(KirkaApplication.class, args);
     }
 }

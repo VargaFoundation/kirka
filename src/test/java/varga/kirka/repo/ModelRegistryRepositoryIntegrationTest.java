@@ -57,6 +57,7 @@ public class ModelRegistryRepositoryIntegrationTest extends AbstractHBaseIntegra
                 .currentStage("None")
                 .source("hdfs:///tmp")
                 .runId("run-1")
+                .status(varga.kirka.model.ModelVersionStatus.READY)
                 .build();
         
         modelRegistryRepository.createModelVersion(version);
@@ -64,5 +65,19 @@ public class ModelRegistryRepositoryIntegrationTest extends AbstractHBaseIntegra
         varga.kirka.model.ModelVersion retrieved = modelRegistryRepository.getModelVersion(modelName, "1");
         assertNotNull(retrieved);
         assertEquals("1", retrieved.getVersion());
+        assertEquals(varga.kirka.model.ModelVersionStatus.READY, retrieved.getStatus());
+    }
+
+    @Test
+    public void testUpdateAndDelete() throws IOException {
+        String name = "upd-del-model";
+        modelRegistryRepository.createRegisteredModel(name);
+        modelRegistryRepository.updateRegisteredModel(name, "new desc");
+        
+        RegisteredModel retrieved = modelRegistryRepository.getRegisteredModel(name);
+        assertEquals("new desc", retrieved.getDescription());
+
+        modelRegistryRepository.deleteRegisteredModel(name);
+        assertNull(modelRegistryRepository.getRegisteredModel(name));
     }
 }

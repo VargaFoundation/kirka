@@ -34,16 +34,31 @@ public class ArtifactControllerTest {
 
     @Test
     public void testListArtifacts() throws Exception {
-        Run run = Run.builder().runId("run-1").artifactUri("hdfs:///tmp").build();
+        Run run = Run.builder().info(varga.kirka.model.RunInfo.builder().runId("run-1").artifactUri("hdfs:///tmp").build()).build();
         when(runService.getRun("run-1")).thenReturn(run);
         
-        FileStatus status = new FileStatus(100, false, 3, 1024, 0, new Path("hdfs:///tmp/model.pkl"));
-        when(artifactService.listArtifacts(anyString())).thenReturn(List.of(status));
+        varga.kirka.model.FileInfo info = varga.kirka.model.FileInfo.builder()
+                .path("model.pkl")
+                .isDir(false)
+                .fileSize(1024L)
+                .build();
+        when(artifactService.listArtifacts(anyString())).thenReturn(java.util.List.of(info));
 
         mockMvc.perform(get("/api/2.0/mlflow/artifacts/list")
                 .param("run_id", "run-1")
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.files[0].path").value("model.pkl"));
+    }
+
+    @Test
+    public void testDeleteArtifact() throws Exception {
+        Run run = Run.builder().info(varga.kirka.model.RunInfo.builder().runId("run-1").artifactUri("hdfs:///tmp").build()).build();
+        when(runService.getRun("run-1")).thenReturn(run);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/2.0/mlflow/artifacts/delete")
+                .content("{\"run_id\": \"run-1\", \"path\": \"model.pkl\"}")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
     }
 }

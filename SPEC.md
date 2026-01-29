@@ -25,6 +25,10 @@ Le back-end implémente les interfaces REST de MLFlow (v2.0+).
         *   **Runs/Métriques :** Utilisation de colonnes dynamiques pour les métriques et paramètres afin de garantir une scalabilité maximale.
         *   **Metric History :** Table `mlflow_metric_history` pour stocker l'historique temporel des métriques (row key: `runId_metricKey_reversedTimestamp`).
         *   **Model Registry :** Tables `mlflow_registered_models` et `mlflow_model_versions` pour la gestion des modèles.
+*   **Prompt Registry :** Table `mlflow_prompts` pour le versionnage et la gestion des templates de prompts.
+*   **Scoring Service :** Endpoints `/invocations`, `/ping`, `/version`, `/metadata` pour servir les modèles loggés.
+*   **Scorer Management :** Endpoints `/api/2.0/mlflow/scorers` (`/list`, `/versions`, `/register`, `/get`, `/delete`) pour gérer les entités scorers associées aux expériences.
+*   **AI Gateway :** Routes `/api/2.0/mlflow/gateway` pour centraliser les accès aux modèles LLM.
 *   **Gestion des Artefacts :**
     *   **Stockage :** HDFS.
     *   **Opérations :** Upload, download et listage des fichiers de modèles, logs et graphiques.

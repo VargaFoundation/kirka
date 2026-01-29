@@ -29,13 +29,23 @@ public class ArtifactServiceTest {
     @Test
     public void testListArtifacts() throws IOException {
         String path = "hdfs:///test";
-        FileStatus status = new FileStatus(0, false, 0, 0, 0, new Path(path + "/file.txt"));
-        when(artifactRepository.listArtifacts(path)).thenReturn(List.of(status));
+        varga.kirka.model.FileInfo info = varga.kirka.model.FileInfo.builder()
+                .path("hdfs:///test/file.txt")
+                .isDir(false)
+                .build();
+        when(artifactRepository.listArtifacts(path)).thenReturn(List.of(info));
 
-        List<FileStatus> results = artifactService.listArtifacts(path);
+        List<varga.kirka.model.FileInfo> results = artifactService.listArtifacts(path);
 
         assertEquals(1, results.size());
-        assertEquals("file.txt", results.get(0).getPath().getName());
+        assertEquals("hdfs:///test/file.txt", results.get(0).getPath());
+    }
+
+    @Test
+    public void testDeleteArtifact() throws IOException {
+        String path = "hdfs:///test/file.txt";
+        artifactService.deleteArtifact(path);
+        verify(artifactRepository).deleteArtifact(path);
     }
 
     @Test

@@ -1,6 +1,7 @@
 package varga.kirka.repo;
 import lombok.extern.slf4j.Slf4j;
 import varga.kirka.model.Experiment;
+import varga.kirka.model.ExperimentTag;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.*;
 import org.apache.hadoop.hbase.util.Bytes;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Repository;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Repository
@@ -38,8 +40,8 @@ public class ExperimentRepository {
             put.addColumn(CF_INFO, COL_LAST_UPDATE_TIME, Bytes.toBytes(experiment.getLastUpdateTime()));
             
             if (experiment.getTags() != null) {
-                for (java.util.Map.Entry<String, String> entry : experiment.getTags().entrySet()) {
-                    put.addColumn(CF_TAGS, Bytes.toBytes(entry.getKey()), Bytes.toBytes(entry.getValue()));
+                for (ExperimentTag tag : experiment.getTags()) {
+                    put.addColumn(CF_TAGS, Bytes.toBytes(tag.getKey()), Bytes.toBytes(tag.getValue()));
                 }
             }
             
@@ -115,12 +117,12 @@ public class ExperimentRepository {
         }
     }
 
-    private java.util.Map<String, String> extractTags(Result result) {
-        java.util.Map<String, String> tags = new java.util.HashMap<>();
+    private List<ExperimentTag> extractTags(Result result) {
+        List<ExperimentTag> tags = new ArrayList<>();
         java.util.NavigableMap<byte[], byte[]> map = result.getFamilyMap(CF_TAGS);
         if (map != null) {
             for (java.util.Map.Entry<byte[], byte[]> entry : map.entrySet()) {
-                tags.put(Bytes.toString(entry.getKey()), Bytes.toString(entry.getValue()));
+                tags.add(new ExperimentTag(Bytes.toString(entry.getKey()), Bytes.toString(entry.getValue())));
             }
         }
         return tags;

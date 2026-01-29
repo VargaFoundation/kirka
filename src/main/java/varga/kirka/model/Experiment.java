@@ -1,17 +1,21 @@
 package varga.kirka.model;
 
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
-import java.util.Map;
+import lombok.NoArgsConstructor;
+import java.util.List;
 
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class Experiment {
     private String experimentId;
     private String name;
     private String artifactLocation;
     private String lifecycleStage;
-    private long creationTime;
     private long lastUpdateTime;
-    private Map<String, String> tags;
+    private long creationTime;
+    private List<ExperimentTag> tags;
 }

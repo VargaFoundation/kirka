@@ -1,14 +1,13 @@
 package varga.kirka.service;
-
 import lombok.extern.slf4j.Slf4j;
-import varga.kirka.model.ModelVersion;
-import varga.kirka.model.RegisteredModel;
+import varga.kirka.model.*;
 import varga.kirka.repo.ModelRegistryRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -48,11 +47,13 @@ public class ModelRegistryService {
                 .currentStage("None")
                 .source(source)
                 .runId(runId)
+                .status(ModelVersionStatus.READY)
                 .build();
         
         modelRegistryRepository.createModelVersion(version);
         return version;
     }
+
     public List<RegisteredModel> searchRegisteredModels(String filter) throws IOException {
         List<RegisteredModel> all = modelRegistryRepository.listRegisteredModels();
         if (filter != null && !filter.isEmpty()) {
@@ -61,7 +62,7 @@ public class ModelRegistryService {
                 String pattern = filter.split("LIKE")[1].trim().replace("'", "").replace("%", ".*");
                 return all.stream()
                     .filter(m -> m.getName().matches(pattern))
-                    .collect(java.util.stream.Collectors.toList());
+                    .collect(Collectors.toList());
             }
         }
         return all;

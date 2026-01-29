@@ -1,7 +1,6 @@
 package varga.kirka.repo;
 import lombok.extern.slf4j.Slf4j;
-import varga.kirka.model.RegisteredModel;
-import varga.kirka.model.ModelVersion;
+import varga.kirka.model.*;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.*;
 import org.apache.hadoop.hbase.util.Bytes;
@@ -103,6 +102,16 @@ public class ModelRegistryRepository {
         byte[] runId = result.getValue(CF_INFO, Bytes.toBytes("run_id"));
         byte[] status = result.getValue(CF_INFO, Bytes.toBytes("status"));
 
+        String statusStr = status != null ? Bytes.toString(status) : null;
+        ModelVersionStatus modelStatus = ModelVersionStatus.READY;
+        if (statusStr != null) {
+            try {
+                modelStatus = ModelVersionStatus.valueOf(statusStr);
+            } catch (IllegalArgumentException e) {
+                log.warn("Invalid model status: {}", statusStr);
+            }
+        }
+
         return ModelVersion.builder()
                 .name(name != null ? Bytes.toString(name) : null)
                 .version(version != null ? Bytes.toString(version) : null)
@@ -113,7 +122,7 @@ public class ModelRegistryRepository {
                 .currentStage(currentStage != null ? Bytes.toString(currentStage) : null)
                 .source(source != null ? Bytes.toString(source) : null)
                 .runId(runId != null ? Bytes.toString(runId) : null)
-                .status(status != null ? Bytes.toString(status) : null)
+                .status(modelStatus)
                 .build();
     }
     

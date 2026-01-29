@@ -5,6 +5,7 @@ import org.apache.hadoop.io.IOUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 
+import varga.kirka.model.FileInfo;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -32,18 +33,22 @@ public class ArtifactRepository {
         }
     }
 
-    public List<FileStatus> listArtifacts(String hdfsPath) throws IOException {
-        List<FileStatus> fileStatuses = new ArrayList<>();
+    public List<FileInfo> listArtifacts(String hdfsPath) throws IOException {
+        List<FileInfo> fileInfos = new ArrayList<>();
         Path path = new Path(hdfsPath);
         if (fileSystem.exists(path)) {
             FileStatus[] statuses = fileSystem.listStatus(path);
             if (statuses != null) {
                 for (FileStatus status : statuses) {
-                    fileStatuses.add(status);
+                    fileInfos.add(FileInfo.builder()
+                            .path(status.getPath().toString())
+                            .isDir(status.isDirectory())
+                            .fileSize(status.isDirectory() ? null : status.getLen())
+                            .build());
                 }
             }
         }
-        return fileStatuses;
+        return fileInfos;
     }
 
     public boolean exists(String hdfsPath) throws IOException {

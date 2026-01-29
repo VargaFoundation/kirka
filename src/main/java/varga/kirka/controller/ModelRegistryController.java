@@ -1,14 +1,13 @@
 package varga.kirka.controller;
-
 import lombok.extern.slf4j.Slf4j;
-import varga.kirka.model.ModelVersion;
-import varga.kirka.model.RegisteredModel;
+import varga.kirka.model.*;
 import varga.kirka.service.ModelRegistryService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
 import java.util.Map;
+import java.util.List;
 
 @Slf4j
 @RestController
@@ -18,114 +17,206 @@ public class ModelRegistryController {
     @Autowired
     private ModelRegistryService modelRegistryService;
 
+    @lombok.Data
+    public static class CreateRegisteredModelRequest {
+        private String name;
+    }
+
+    @lombok.Data
+    @lombok.AllArgsConstructor
+    public static class RegisteredModelResponse {
+        private RegisteredModel registered_model;
+    }
+
+    @lombok.Data
+    @lombok.AllArgsConstructor
+    public static class RegisteredModelsResponse {
+        private List<RegisteredModel> registered_models;
+    }
+
+    @lombok.Data
+    public static class CreateModelVersionRequest {
+        private String name;
+        private String source;
+        private String run_id;
+    }
+
+    @lombok.Data
+    @lombok.AllArgsConstructor
+    public static class ModelVersionResponse {
+        private ModelVersion model_version;
+    }
+
+    @lombok.Data
+    public static class UpdateRegisteredModelRequest {
+        private String name;
+        private String description;
+    }
+
+    @lombok.Data
+    public static class DeleteRegisteredModelRequest {
+        private String name;
+    }
+
+    @lombok.Data
+    public static class UpdateModelVersionRequest {
+        private String name;
+        private String version;
+        private String description;
+    }
+
+    @lombok.Data
+    public static class DeleteModelVersionRequest {
+        private String name;
+        private String version;
+    }
+
+    @lombok.Data
+    public static class TransitionModelVersionStageRequest {
+        private String name;
+        private String version;
+        private String stage;
+        private String archive_existing_versions;
+    }
+
+    @lombok.Data
+    public static class SetRegisteredModelTagRequest {
+        private String name;
+        private String key;
+        private String value;
+    }
+
+    @lombok.Data
+    public static class DeleteRegisteredModelTagRequest {
+        private String name;
+        private String key;
+    }
+
+    @lombok.Data
+    public static class SetModelVersionTagRequest {
+        private String name;
+        private String version;
+        private String key;
+        private String value;
+    }
+
+    @lombok.Data
+    public static class DeleteModelVersionTagRequest {
+        private String name;
+        private String version;
+        private String key;
+    }
+
     @PostMapping("/registered-models/create")
-    public Map<String, Object> createRegisteredModel(@RequestBody Map<String, String> request) throws IOException {
-        String name = request.get("name");
+    public RegisteredModelResponse createRegisteredModel(@RequestBody CreateRegisteredModelRequest request) throws IOException {
+        String name = request.getName();
         log.info("REST request to create registered model: {}", name);
         modelRegistryService.createRegisteredModel(name);
-        return Map.of("registered_model", modelRegistryService.getRegisteredModel(name));
+        return new RegisteredModelResponse(modelRegistryService.getRegisteredModel(name));
     }
 
     @GetMapping("/registered-models/get")
-    public Map<String, Object> getRegisteredModel(@RequestParam("name") String name) throws IOException {
-        return Map.of("registered_model", modelRegistryService.getRegisteredModel(name));
+    public RegisteredModelResponse getRegisteredModel(@RequestParam("name") String name) throws IOException {
+        return new RegisteredModelResponse(modelRegistryService.getRegisteredModel(name));
     }
 
     @GetMapping("/registered-models/list")
-    public Map<String, Object> listRegisteredModels() throws IOException {
-        return Map.of("registered_models", modelRegistryService.listRegisteredModels());
+    public RegisteredModelsResponse listRegisteredModels() throws IOException {
+        return new RegisteredModelsResponse(modelRegistryService.listRegisteredModels());
     }
 
     @PostMapping("/model-versions/create")
-    public Map<String, Object> createModelVersion(@RequestBody Map<String, String> request) throws IOException {
-        String name = request.get("name");
-        String source = request.get("source");
-        String runId = request.get("run_id");
+    public ModelVersionResponse createModelVersion(@RequestBody CreateModelVersionRequest request) throws IOException {
+        String name = request.getName();
+        String source = request.getSource();
+        String runId = request.getRun_id();
         ModelVersion version = modelRegistryService.createModelVersion(name, source, runId);
-        return Map.of("model_version", version);
+        return new ModelVersionResponse(version);
     }
+
     @GetMapping("/registered-models/search")
-    public Map<String, Object> searchRegisteredModels(@RequestParam(value = "filter", required = false) String filter) throws IOException {
-        return Map.of("registered_models", modelRegistryService.searchRegisteredModels(filter));
+    public RegisteredModelsResponse searchRegisteredModels(@RequestParam(value = "filter", required = false) String filter) throws IOException {
+        return new RegisteredModelsResponse(modelRegistryService.searchRegisteredModels(filter));
     }
 
     @PostMapping("/registered-models/update")
-    public Map<String, Object> updateRegisteredModel(@RequestBody Map<String, String> request) throws IOException {
-        String name = request.get("name");
-        String description = request.get("description");
+    public Map<String, Object> updateRegisteredModel(@RequestBody UpdateRegisteredModelRequest request) throws IOException {
+        String name = request.getName();
+        String description = request.getDescription();
         modelRegistryService.updateRegisteredModel(name, description);
         return Map.of();
     }
 
     @PostMapping("/registered-models/delete")
-    public Map<String, Object> deleteRegisteredModel(@RequestBody Map<String, String> request) throws IOException {
-        String name = request.get("name");
+    public Map<String, Object> deleteRegisteredModel(@RequestBody DeleteRegisteredModelRequest request) throws IOException {
+        String name = request.getName();
         modelRegistryService.deleteRegisteredModel(name);
         return Map.of();
     }
 
     @GetMapping("/model-versions/get")
-    public Map<String, Object> getModelVersion(@RequestParam("name") String name, @RequestParam("version") String version) throws IOException {
-        return Map.of("model_version", modelRegistryService.getModelVersion(name, version));
+    public ModelVersionResponse getModelVersion(@RequestParam("name") String name, @RequestParam("version") String version) throws IOException {
+        return new ModelVersionResponse(modelRegistryService.getModelVersion(name, version));
     }
 
     @PostMapping("/model-versions/update")
-    public Map<String, Object> updateModelVersion(@RequestBody Map<String, String> request) throws IOException {
-        String name = request.get("name");
-        String version = request.get("version");
-        String description = request.get("description");
+    public Map<String, Object> updateModelVersion(@RequestBody UpdateModelVersionRequest request) throws IOException {
+        String name = request.getName();
+        String version = request.getVersion();
+        String description = request.getDescription();
         modelRegistryService.updateModelVersion(name, version, description);
         return Map.of();
     }
 
     @PostMapping("/model-versions/delete")
-    public Map<String, Object> deleteModelVersion(@RequestBody Map<String, String> request) throws IOException {
-        String name = request.get("name");
-        String version = request.get("version");
+    public Map<String, Object> deleteModelVersion(@RequestBody DeleteModelVersionRequest request) throws IOException {
+        String name = request.getName();
+        String version = request.getVersion();
         modelRegistryService.deleteModelVersion(name, version);
         return Map.of();
     }
 
     @PostMapping("/model-versions/transition-stage")
-    public Map<String, Object> transitionModelVersionStage(@RequestBody Map<String, String> request) throws IOException {
-        String name = request.get("name");
-        String version = request.get("version");
-        String stage = request.get("stage");
-        String archiveExistingVersions = request.get("archive_existing_versions");
-        return Map.of("model_version", modelRegistryService.transitionModelVersionStage(name, version, stage, Boolean.parseBoolean(archiveExistingVersions)));
+    public ModelVersionResponse transitionModelVersionStage(@RequestBody TransitionModelVersionStageRequest request) throws IOException {
+        String name = request.getName();
+        String version = request.getVersion();
+        String stage = request.getStage();
+        String archiveExistingVersions = request.getArchive_existing_versions();
+        return new ModelVersionResponse(modelRegistryService.transitionModelVersionStage(name, version, stage, Boolean.parseBoolean(archiveExistingVersions)));
     }
+
     @PostMapping("/registered-models/set-tag")
-    public Map<String, Object> setRegisteredModelTag(@RequestBody Map<String, String> request) throws IOException {
-        String name = request.get("name");
-        String key = request.get("key");
-        String value = request.get("value");
+    public Map<String, Object> setRegisteredModelTag(@RequestBody SetRegisteredModelTagRequest request) throws IOException {
+        String name = request.getName();
+        String key = request.getKey();
+        String value = request.getValue();
         modelRegistryService.setRegisteredModelTag(name, key, value);
         return Map.of();
     }
 
     @PostMapping("/registered-models/delete-tag")
-    public Map<String, Object> deleteRegisteredModelTag(@RequestBody Map<String, String> request) throws IOException {
-        String name = request.get("name");
-        String key = request.get("key");
+    public Map<String, Object> deleteRegisteredModelTag(@RequestBody DeleteRegisteredModelTagRequest request) throws IOException {
+        String name = request.getName();
+        String key = request.getKey();
         modelRegistryService.deleteRegisteredModelTag(name, key);
         return Map.of();
     }
 
     @PostMapping("/model-versions/set-tag")
-    public Map<String, Object> setModelVersionTag(@RequestBody Map<String, String> request) throws IOException {
-        String name = request.get("name");
-        String version = request.get("version");
-        String key = request.get("key");
-        String value = request.get("value");
+    public Map<String, Object> setModelVersionTag(@RequestBody SetModelVersionTagRequest request) throws IOException {
+        String name = request.getName();
+        String version = request.getVersion();
+        String key = request.getKey();
+        String value = request.getValue();
         modelRegistryService.setModelVersionTag(name, version, key, value);
         return Map.of();
     }
 
     @PostMapping("/model-versions/delete-tag")
-    public Map<String, Object> deleteModelVersionTag(@RequestBody Map<String, String> request) throws IOException {
-        String name = request.get("name");
-        String version = request.get("version");
-        String key = request.get("key");
+    public Map<String, Object> deleteModelVersionTag(@RequestBody DeleteModelVersionTagRequest request) throws IOException {
+        String name = request.getName();
+        String version = request.getVersion();
+        String key = request.getKey();
         modelRegistryService.deleteModelVersionTag(name, version, key);
         return Map.of();
     }

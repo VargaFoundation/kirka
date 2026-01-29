@@ -9,13 +9,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import varga.kirka.model.Experiment;
 import varga.kirka.service.ExperimentService;
 
-import static org.mockito.ArgumentMatchers.anyMap;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.mockito.ArgumentMatchers.*;
 
 @WebMvcTest(ExperimentController.class)
 public class ExperimentControllerTest {
@@ -40,13 +34,40 @@ public class ExperimentControllerTest {
 
     @Test
     public void testCreateExperiment() throws Exception {
-        when(experimentService.createExperiment(anyString(), anyString(), anyMap())).thenReturn("exp-1");
+        when(experimentService.createExperiment(anyString(), any(), any())).thenReturn("exp-1");
         
         mockMvc.perform(post("/api/2.0/mlflow/experiments/create")
                 .content("{\"name\": \"test-exp\", \"artifact_location\": \"hdfs:///tmp\"}")
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.experiment_id").value("exp-1"));
+    }
+
+    @Test
+    public void testUpdateExperiment() throws Exception {
+        mockMvc.perform(post("/api/2.0/mlflow/experiments/update")
+                .content("{\"experiment_id\": \"123\", \"new_name\": \"new-name\"}")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    public void testDeleteExperiment() throws Exception {
+        mockMvc.perform(post("/api/2.0/mlflow/experiments/delete")
+                .content("{\"experiment_id\": \"123\"}")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    public void testSearchExperiments() throws Exception {
+        when(experimentService.searchExperiments(any(), any(), any())).thenReturn(java.util.List.of());
+
+        mockMvc.perform(get("/api/2.0/mlflow/experiments/search")
+                .param("view_type", "ACTIVE_ONLY")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.experiments").isArray());
     }
 
     @Test

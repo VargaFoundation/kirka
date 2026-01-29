@@ -1,6 +1,10 @@
 <service role="KIRKA" name="kirka" version="0.0.1">
     <routes>
         <route path="/kirka/api/2.0/mlflow/**"/>
+        <route path="/kirka/api/2.0/mlflow/artifacts/**"/>
+        <route path="/kirka/api/2.0/mlflow/registered-models/**"/>
+        <route path="/kirka/api/2.0/mlflow/model-versions/**"/>
+        <route path="/kirka/api/invocations"/>
     </routes>
     <dispatch classname="org.apache.knox.gateway.dispatch.DefaultDispatch"/>
 </service>

@@ -1,6 +1,6 @@
 package varga.kirka.repo;
 import lombok.extern.slf4j.Slf4j;
-import varga.kirka.model.Run;
+import varga.kirka.model.*;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.*;
 import org.apache.hadoop.hbase.util.Bytes;
@@ -35,18 +35,18 @@ public class RunRepository {
     private Connection connection;
 
     public void createRun(Run run) throws IOException {
-        log.info("HBase: creating run {}", run.getRunId());
+        log.info("HBase: creating run {}", run.getInfo().getRunId());
         try (Table table = connection.getTable(TableName.valueOf(TABLE_NAME))) {
-            Put put = new Put(Bytes.toBytes(run.getRunId()));
-            put.addColumn(CF_INFO, COL_EXPERIMENT_ID, Bytes.toBytes(run.getExperimentId()));
-            put.addColumn(CF_INFO, COL_STATUS, Bytes.toBytes(run.getStatus()));
-            put.addColumn(CF_INFO, COL_START_TIME, Bytes.toBytes(run.getStartTime()));
-            put.addColumn(CF_INFO, COL_ARTIFACT_URI, Bytes.toBytes(run.getArtifactUri()));
+            Put put = new Put(Bytes.toBytes(run.getInfo().getRunId()));
+            put.addColumn(CF_INFO, COL_EXPERIMENT_ID, Bytes.toBytes(run.getInfo().getExperimentId()));
+            put.addColumn(CF_INFO, COL_STATUS, Bytes.toBytes(run.getInfo().getStatus().name()));
+            put.addColumn(CF_INFO, COL_START_TIME, Bytes.toBytes(run.getInfo().getStartTime()));
+            put.addColumn(CF_INFO, COL_ARTIFACT_URI, Bytes.toBytes(run.getInfo().getArtifactUri()));
             put.addColumn(CF_INFO, Bytes.toBytes("lifecycle_stage"), Bytes.toBytes("active"));
             
-            if (run.getTags() != null) {
-                for (Map.Entry<String, String> entry : run.getTags().entrySet()) {
-                    put.addColumn(CF_TAGS, Bytes.toBytes(entry.getKey()), Bytes.toBytes(entry.getValue()));
+            if (run.getData() != null && run.getData().getTags() != null) {
+                for (RunTag tag : run.getData().getTags()) {
+                    put.addColumn(CF_TAGS, Bytes.toBytes(tag.getKey()), Bytes.toBytes(tag.getValue()));
                 }
             }
             
@@ -83,16 +83,16 @@ public class RunRepository {
         }
     }
 
-    public void logBatch(String runId, List<Map<String, Object>> metrics, List<Map<String, String>> params, List<Map<String, String>> tags) throws IOException {
+    public void logBatch(String runId, List<Metric> metrics, List<Param> params, List<RunTag> tags) throws IOException {
         try (Table table = connection.getTable(TableName.valueOf(TABLE_NAME));
              Table historyTable = connection.getTable(TableName.valueOf(METRIC_HISTORY_TABLE))) {
             Put put = new Put(Bytes.toBytes(runId));
             if (metrics != null) {
-                for (Map<String, Object> m : metrics) {
-                    String key = (String) m.get("key");
-                    double value = ((Number) m.get("value")).doubleValue();
-                    long timestamp = m.containsKey("timestamp") ? ((Number) m.get("timestamp")).longValue() : System.currentTimeMillis();
-                    long step = m.containsKey("step") ? ((Number) m.get("step")).longValue() : 0L;
+                for (Metric m : metrics) {
+                    String key = m.getKey();
+                    double value = m.getValue();
+                    long timestamp = m.getTimestamp();
+                    long step = m.getStep();
 
                     // Update latest value in runs table
                     put.addColumn(CF_METRICS, Bytes.toBytes(key), Bytes.toBytes(value));
@@ -109,13 +109,13 @@ public class RunRepository {
                 }
             }
             if (params != null) {
-                for (Map<String, String> p : params) {
-                    put.addColumn(CF_PARAMS, Bytes.toBytes(p.get("key")), Bytes.toBytes(p.get("value")));
+                for (Param p : params) {
+                    put.addColumn(CF_PARAMS, Bytes.toBytes(p.getKey()), Bytes.toBytes(p.getValue()));
                 }
             }
             if (tags != null) {
-                for (Map<String, String> t : tags) {
-                    put.addColumn(CF_TAGS, Bytes.toBytes(t.get("key")), Bytes.toBytes(t.get("value")));
+                for (RunTag t : tags) {
+                    put.addColumn(CF_TAGS, Bytes.toBytes(t.getKey()), Bytes.toBytes(t.getValue()));
                 }
             }
             table.put(put);
@@ -164,26 +164,72 @@ public class RunRepository {
 
     private Run mapResultToRun(Result result) {
         String runId = Bytes.toString(result.getRow());
-        Map<String, String> params = extractMap(result, CF_PARAMS);
-        Map<String, Double> metrics = extractMetrics(result);
-        Map<String, String> tags = extractMap(result, CF_TAGS);
+        
+        List<Metric> metrics = new ArrayList<>();
+        java.util.NavigableMap<byte[], byte[]> metricsMap = result.getFamilyMap(CF_METRICS);
+        if (metricsMap != null) {
+            for (Map.Entry<byte[], byte[]> entry : metricsMap.entrySet()) {
+                metrics.add(Metric.builder()
+                        .key(Bytes.toString(entry.getKey()))
+                        .value(Bytes.toDouble(entry.getValue()))
+                        .build());
+            }
+        }
+
+        List<Param> params = new ArrayList<>();
+        java.util.NavigableMap<byte[], byte[]> paramsMap = result.getFamilyMap(CF_PARAMS);
+        if (paramsMap != null) {
+            for (Map.Entry<byte[], byte[]> entry : paramsMap.entrySet()) {
+                params.add(Param.builder()
+                        .key(Bytes.toString(entry.getKey()))
+                        .value(Bytes.toString(entry.getValue()))
+                        .build());
+            }
+        }
+
+        List<RunTag> tags = new ArrayList<>();
+        java.util.NavigableMap<byte[], byte[]> tagsMap = result.getFamilyMap(CF_TAGS);
+        if (tagsMap != null) {
+            for (Map.Entry<byte[], byte[]> entry : tagsMap.entrySet()) {
+                tags.add(RunTag.builder()
+                        .key(Bytes.toString(entry.getKey()))
+                        .value(Bytes.toString(entry.getValue()))
+                        .build());
+            }
+        }
 
         byte[] experimentId = result.getValue(CF_INFO, COL_EXPERIMENT_ID);
-        byte[] status = result.getValue(CF_INFO, COL_STATUS);
+        byte[] statusBytes = result.getValue(CF_INFO, COL_STATUS);
         byte[] startTime = result.getValue(CF_INFO, COL_START_TIME);
         byte[] endTime = result.getValue(CF_INFO, COL_END_TIME);
         byte[] artifactUri = result.getValue(CF_INFO, COL_ARTIFACT_URI);
+        byte[] lifecycleStage = result.getValue(CF_INFO, Bytes.toBytes("lifecycle_stage"));
+
+        RunStatus status = RunStatus.RUNNING;
+        if (statusBytes != null) {
+            try {
+                status = RunStatus.valueOf(Bytes.toString(statusBytes));
+            } catch (Exception e) {
+                log.warn("Could not parse status: {}", Bytes.toString(statusBytes));
+            }
+        }
 
         return Run.builder()
-                .runId(runId)
-                .experimentId(experimentId != null ? Bytes.toString(experimentId) : null)
-                .status(status != null ? Bytes.toString(status) : null)
-                .startTime(startTime != null ? Bytes.toLong(startTime) : 0L)
-                .endTime(endTime != null ? Bytes.toLong(endTime) : 0L)
-                .artifactUri(artifactUri != null ? Bytes.toString(artifactUri) : null)
-                .parameters(params)
-                .metrics(metrics)
-                .tags(tags)
+                .info(RunInfo.builder()
+                        .runId(runId)
+                        .runUuid(runId)
+                        .experimentId(experimentId != null ? Bytes.toString(experimentId) : null)
+                        .status(status)
+                        .startTime(startTime != null ? Bytes.toLong(startTime) : 0L)
+                        .endTime(endTime != null ? Bytes.toLong(endTime) : 0L)
+                        .artifactUri(artifactUri != null ? Bytes.toString(artifactUri) : null)
+                        .lifecycleStage(lifecycleStage != null ? Bytes.toString(lifecycleStage) : "active")
+                        .build())
+                .data(RunData.builder()
+                        .metrics(metrics)
+                        .params(params)
+                        .tags(tags)
+                        .build())
                 .build();
     }
 
@@ -220,23 +266,37 @@ public class RunRepository {
         return history;
     }
 
-    private Map<String, String> extractMap(Result result, byte[] family) {
-        Map<String, String> map = new HashMap<>();
-        NavigableMap<byte[], byte[]> familyMap = result.getFamilyMap(family);
-        if (familyMap != null) {
-            for (Map.Entry<byte[], byte[]> entry : familyMap.entrySet()) {
-                map.put(Bytes.toString(entry.getKey()), Bytes.toString(entry.getValue()));
+    private List<Param> extractParams(Result result) {
+        List<Param> list = new ArrayList<>();
+        java.util.NavigableMap<byte[], byte[]> map = result.getFamilyMap(CF_PARAMS);
+        if (map != null) {
+            for (Map.Entry<byte[], byte[]> entry : map.entrySet()) {
+                list.add(new Param(Bytes.toString(entry.getKey()), Bytes.toString(entry.getValue())));
             }
         }
-        return map;
+        return list;
     }
 
-    private Map<String, Double> extractMetrics(Result result) {
-        Map<String, Double> map = new HashMap<>();
-        NavigableMap<byte[], byte[]> familyMap = result.getFamilyMap(CF_METRICS);
+    private List<RunTag> extractTags(Result result) {
+        List<RunTag> list = new ArrayList<>();
+        java.util.NavigableMap<byte[], byte[]> map = result.getFamilyMap(CF_TAGS);
+        if (map != null) {
+            for (Map.Entry<byte[], byte[]> entry : map.entrySet()) {
+                list.add(new RunTag(Bytes.toString(entry.getKey()), Bytes.toString(entry.getValue())));
+            }
+        }
+        return list;
+    }
+
+    private List<Metric> extractMetrics(Result result) {
+        List<Metric> map = new ArrayList<>();
+        java.util.NavigableMap<byte[], byte[]> familyMap = result.getFamilyMap(CF_METRICS);
         if (familyMap != null) {
             for (Map.Entry<byte[], byte[]> entry : familyMap.entrySet()) {
-                map.put(Bytes.toString(entry.getKey()), Bytes.toDouble(entry.getValue()));
+                map.add(Metric.builder()
+                        .key(Bytes.toString(entry.getKey()))
+                        .value(Bytes.toDouble(entry.getValue()))
+                        .build());
             }
         }
         return map;

@@ -40,6 +40,41 @@ public class ModelRegistryControllerTest {
     }
 
     @Test
+    public void testCreateModelVersion() throws Exception {
+        varga.kirka.model.ModelVersion version = varga.kirka.model.ModelVersion.builder().name("m1").version("1").build();
+        when(modelRegistryService.createModelVersion(anyString(), anyString(), anyString())).thenReturn(version);
+
+        mockMvc.perform(post("/api/2.0/mlflow/model-versions/create")
+                .content("{\"name\": \"m1\", \"source\": \"s1\", \"run_id\": \"r1\"}")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.model_version.version").value("1"));
+    }
+
+    @Test
+    public void testTransitionModelVersionStage() throws Exception {
+        varga.kirka.model.ModelVersion version = varga.kirka.model.ModelVersion.builder().name("m1").version("1").currentStage("Production").build();
+        when(modelRegistryService.transitionModelVersionStage(anyString(), anyString(), anyString(), anyBoolean())).thenReturn(version);
+
+        mockMvc.perform(post("/api/2.0/mlflow/model-versions/transition-stage")
+                .content("{\"name\": \"m1\", \"version\": \"1\", \"stage\": \"Production\"}")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.model_version.current_stage").value("Production"));
+    }
+
+    @Test
+    public void testSearchRegisteredModels() throws Exception {
+        when(modelRegistryService.searchRegisteredModels(any())).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/2.0/mlflow/registered-models/search")
+                .param("filter", "name LIKE 'm1%'")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.registered_models").isArray());
+    }
+
+    @Test
     public void testListRegisteredModels() throws Exception {
         when(modelRegistryService.listRegisteredModels()).thenReturn(List.of());
 

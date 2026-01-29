@@ -36,20 +36,53 @@ public class RunRepositoryIntegrationTest extends AbstractHBaseIntegrationTest {
     public void testCreateAndGetRun() throws IOException {
         String runId = "run-123";
         Run run = Run.builder()
-                .runId(runId)
-                .experimentId("exp-1")
-                .status("RUNNING")
-                .startTime(System.currentTimeMillis())
-                .artifactUri("hdfs:///tmp/run-123")
-                .tags(Map.of("t1", "v1"))
+                .info(varga.kirka.model.RunInfo.builder()
+                        .runId(runId)
+                        .experimentId("exp-1")
+                        .status(varga.kirka.model.RunStatus.RUNNING)
+                        .startTime(System.currentTimeMillis())
+                        .artifactUri("hdfs:///tmp/run-123")
+                        .build())
+                .data(varga.kirka.model.RunData.builder()
+                        .tags(List.of(new varga.kirka.model.RunTag("t1", "v1")))
+                        .build())
                 .build();
 
         runRepository.createRun(run);
 
         Run retrieved = runRepository.getRun(runId);
         assertNotNull(retrieved);
-        assertEquals(runId, retrieved.getRunId());
-        assertEquals("RUNNING", retrieved.getStatus());
-        assertEquals("v1", retrieved.getTags().get("t1"));
+        assertEquals(runId, retrieved.getInfo().getRunId());
+        assertEquals(varga.kirka.model.RunStatus.RUNNING, retrieved.getInfo().getStatus());
+        assertTrue(retrieved.getData().getTags().stream().anyMatch(t -> t.getKey().equals("t1") && t.getValue().equals("v1")));
+    }
+
+    @Test
+    public void testUpdateRun() throws IOException {
+        String runId = "run-update";
+        Run run = Run.builder().info(varga.kirka.model.RunInfo.builder().runId(runId).experimentId("exp-1").status(varga.kirka.model.RunStatus.RUNNING).build()).build();
+        runRepository.createRun(run);
+
+        long endTime = System.currentTimeMillis();
+        runRepository.updateRun(runId, "FINISHED", endTime);
+
+        Run retrieved = runRepository.getRun(runId);
+        assertEquals(varga.kirka.model.RunStatus.FINISHED, retrieved.getInfo().getStatus());
+        assertEquals(endTime, retrieved.getInfo().getEndTime());
+    }
+
+    @Test
+    public void testLogBatch() throws IOException {
+        String runId = "run-batch";
+        Run run = Run.builder().info(varga.kirka.model.RunInfo.builder().runId(runId).experimentId("exp-1").build()).build();
+        runRepository.createRun(run);
+
+        List<varga.kirka.model.Metric> metrics = List.of(new varga.kirka.model.Metric("m1", 0.9, System.currentTimeMillis(), 1));
+        List<varga.kirka.model.Param> params = List.of(new varga.kirka.model.Param("p1", "v1"));
+        runRepository.logBatch(runId, metrics, params, null);
+
+        Run retrieved = runRepository.getRun(runId);
+        assertTrue(retrieved.getData().getMetrics().stream().anyMatch(m -> m.getKey().equals("m1")));
+        assertTrue(retrieved.getData().getParams().stream().anyMatch(p -> p.getKey().equals("p1")));
     }
 }

@@ -61,16 +61,48 @@ public class ExperimentServiceTest {
     public void testSearchExperimentsFilter() throws IOException {
         Experiment exp1 = Experiment.builder().experimentId("1").name("exp1").lifecycleStage("active").build();
         Experiment exp2 = Experiment.builder().experimentId("2").name("exp2").lifecycleStage("deleted").build();
-        when(experimentRepository.listExperiments()).thenReturn(List.of(exp1, exp2));
+        Experiment exp3 = Experiment.builder().experimentId("3").name("exp3").lifecycleStage("active").build();
+        when(experimentRepository.listExperiments()).thenReturn(List.of(exp1, exp2, exp3));
 
         // Test view_type active_only
         List<Experiment> active = experimentService.searchExperiments("active_only", null, null);
-        assertEquals(1, active.size());
-        assertEquals("exp1", active.get(0).getName());
+        assertEquals(2, active.size());
+        assertTrue(active.contains(exp1));
+        assertTrue(active.contains(exp3));
+
+        // Test view_type deleted_only
+        List<Experiment> deleted = experimentService.searchExperiments("deleted_only", null, null);
+        assertEquals(1, deleted.size());
+        assertEquals("exp2", deleted.get(0).getName());
 
         // Test filter by name
-        List<Experiment> filtered = experimentService.searchExperiments(null, null, "name = 'exp2'");
+        List<Experiment> filtered = experimentService.searchExperiments("ALL", null, "name = 'exp2'");
         assertEquals(1, filtered.size());
         assertEquals("exp2", filtered.get(0).getName());
+
+        // Test max_results
+        List<Experiment> limited = experimentService.searchExperiments("ALL", 2, null);
+        assertEquals(2, limited.size());
+    }
+
+    @Test
+    public void testUpdateExperiment() throws IOException {
+        experimentService.updateExperiment("123", "New Name");
+        verify(experimentRepository).updateExperiment("123", "New Name");
+    }
+
+    @Test
+    public void testDeleteRestoreExperiment() throws IOException {
+        experimentService.deleteExperiment("123");
+        verify(experimentRepository).deleteExperiment("123");
+
+        experimentService.restoreExperiment("123");
+        verify(experimentRepository).restoreExperiment("123");
+    }
+
+    @Test
+    public void testSetExperimentTag() throws IOException {
+        experimentService.setExperimentTag("123", "key", "value");
+        verify(experimentRepository).setExperimentTag("123", "key", "value");
     }
 }

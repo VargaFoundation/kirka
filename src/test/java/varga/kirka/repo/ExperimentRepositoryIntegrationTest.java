@@ -20,9 +20,7 @@ import java.util.List;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest(properties = {
     "spring.main.allow-bean-definition-overriding=true",
@@ -44,7 +42,7 @@ public class ExperimentRepositoryIntegrationTest extends AbstractHBaseIntegratio
                 .lifecycleStage("active")
                 .creationTime(123456789L)
                 .lastUpdateTime(123456789L)
-                .tags(Map.of("key1", "value1"))
+                .tags(List.of(new varga.kirka.model.ExperimentTag("key1", "value1")))
                 .build();
 
         experimentRepository.createExperiment(experiment);
@@ -52,7 +50,79 @@ public class ExperimentRepositoryIntegrationTest extends AbstractHBaseIntegratio
         Experiment retrieved = experimentRepository.getExperiment(experimentId);
         assertNotNull(retrieved);
         assertEquals("Test Experiment", retrieved.getName());
-        assertEquals("value1", retrieved.getTags().get("key1"));
+        assertNotNull(retrieved.getTags());
+        assertEquals(1, retrieved.getTags().size());
+        assertEquals("key1", retrieved.getTags().get(0).getKey());
+        assertEquals("value1", retrieved.getTags().get(0).getValue());
+    }
+
+    @Test
+    public void testGetExperimentByName() throws IOException {
+        String name = "Unique Name";
+        Experiment experiment = Experiment.builder()
+                .experimentId("exp-unique")
+                .name(name)
+                .artifactLocation("hdfs:///tmp")
+                .lifecycleStage("active")
+                .build();
+        experimentRepository.createExperiment(experiment);
+
+        Experiment retrieved = experimentRepository.getExperimentByName(name);
+        assertNotNull(retrieved);
+        assertEquals(name, retrieved.getName());
+    }
+
+    @Test
+    public void testUpdateExperiment() throws IOException {
+        String experimentId = "exp-update";
+        Experiment experiment = Experiment.builder()
+                .experimentId(experimentId)
+                .name("Old Name")
+                .artifactLocation("hdfs:///tmp")
+                .lifecycleStage("active")
+                .build();
+        experimentRepository.createExperiment(experiment);
+
+        experimentRepository.updateExperiment(experimentId, "New Name");
+
+        Experiment retrieved = experimentRepository.getExperiment(experimentId);
+        assertEquals("New Name", retrieved.getName());
+    }
+
+    @Test
+    public void testDeleteAndRestoreExperiment() throws IOException {
+        String experimentId = "exp-del-rest";
+        Experiment experiment = Experiment.builder()
+                .experimentId(experimentId)
+                .name("DelRest Experiment")
+                .artifactLocation("hdfs:///tmp")
+                .lifecycleStage("active")
+                .build();
+        experimentRepository.createExperiment(experiment);
+
+        experimentRepository.deleteExperiment(experimentId);
+        assertEquals("deleted", experimentRepository.getExperiment(experimentId).getLifecycleStage());
+
+        experimentRepository.restoreExperiment(experimentId);
+        assertEquals("active", experimentRepository.getExperiment(experimentId).getLifecycleStage());
+    }
+
+    @Test
+    public void testSetExperimentTag() throws IOException {
+        String experimentId = "exp-tag";
+        Experiment experiment = Experiment.builder()
+                .experimentId(experimentId)
+                .name("Tag Experiment")
+                .artifactLocation("hdfs:///tmp")
+                .lifecycleStage("active")
+                .build();
+        experimentRepository.createExperiment(experiment);
+
+        experimentRepository.setExperimentTag(experimentId, "new_key", "new_val");
+
+        Experiment retrieved = experimentRepository.getExperiment(experimentId);
+        boolean found = retrieved.getTags().stream().anyMatch(t -> t.getKey().equals("new_key") && t.getValue().equals("new_val"));
+        assertTrue(found);
     }
 
     @Test
@@ -70,8 +140,6 @@ public class ExperimentRepositoryIntegrationTest extends AbstractHBaseIntegratio
 
         List<Experiment> list = experimentRepository.listExperiments();
         assertNotNull(list);
-        // At least our experiment should be there
-        boolean found = list.stream().anyMatch(e -> e.getExperimentId().equals(experimentId));
-        // assertTrue(found); // I won't use assertTrue to avoid import issues if not present
+        assertTrue(list.stream().anyMatch(e -> e.getExperimentId().equals(experimentId)));
     }
 }

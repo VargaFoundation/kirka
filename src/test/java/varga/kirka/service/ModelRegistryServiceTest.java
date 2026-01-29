@@ -57,4 +57,48 @@ public class ModelRegistryServiceTest {
         assertEquals("Production", result.getCurrentStage());
         verify(modelRegistryRepository).updateModelVersionStage(name, version, "Production");
     }
+
+    @Test
+    public void testSearchRegisteredModels() throws IOException {
+        RegisteredModel m1 = RegisteredModel.builder().name("model1").build();
+        RegisteredModel m2 = RegisteredModel.builder().name("model2").build();
+        when(modelRegistryRepository.listRegisteredModels()).thenReturn(List.of(m1, m2));
+
+        java.util.List<RegisteredModel> results = modelRegistryService.searchRegisteredModels("name LIKE 'model1%'");
+        assertEquals(1, results.size());
+        assertEquals("model1", results.get(0).getName());
+    }
+
+    @Test
+    public void testUpdateDeleteRegisteredModel() throws IOException {
+        modelRegistryService.updateRegisteredModel("m1", "desc");
+        verify(modelRegistryRepository).updateRegisteredModel("m1", "desc");
+
+        modelRegistryService.deleteRegisteredModel("m1");
+        verify(modelRegistryRepository).deleteRegisteredModel("m1");
+    }
+
+    @Test
+    public void testUpdateDeleteModelVersion() throws IOException {
+        modelRegistryService.updateModelVersion("m1", "1", "desc");
+        verify(modelRegistryRepository).updateModelVersion("m1", "1", "desc");
+
+        modelRegistryService.deleteModelVersion("m1", "1");
+        verify(modelRegistryRepository).deleteModelVersion("m1", "1");
+    }
+
+    @Test
+    public void testModelTags() throws IOException {
+        modelRegistryService.setRegisteredModelTag("m1", "k", "v");
+        verify(modelRegistryRepository).setRegisteredModelTag("m1", "k", "v");
+
+        modelRegistryService.deleteRegisteredModelTag("m1", "k");
+        verify(modelRegistryRepository).deleteRegisteredModelTag("m1", "k");
+
+        modelRegistryService.setModelVersionTag("m1", "1", "k", "v");
+        verify(modelRegistryRepository).setModelVersionTag("m1", "1", "k", "v");
+
+        modelRegistryService.deleteModelVersionTag("m1", "1", "k");
+        verify(modelRegistryRepository).deleteModelVersionTag("m1", "1", "k");
+    }
 }

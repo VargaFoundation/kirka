@@ -88,6 +88,14 @@ Once configured, the MLFlow API can be accessed through Knox.
 The MLFlow client must point to the URL exposed by Knox. The complete URL to use as `MLFLOW_TRACKING_URI` is:
 `https://<knox-host>:<knox-port>/gateway/<topology-name>/kirka`
 
+#### Configuration of Knox for Models and Artifacts
+
+To ensure Knox correctly filters and routes requests for models and artifacts, the following routes are configured:
+- `/kirka/api/2.0/mlflow/artifacts/**` -> `/api/2.0/mlflow/artifacts/**`
+- `/kirka/api/2.0/mlflow/registered-models/**` -> `/api/2.0/mlflow/registered-models/**`
+- `/kirka/api/2.0/mlflow/model-versions/**` -> `/api/2.0/mlflow/model-versions/**`
+- `/kirka/api/invocations` -> `/api/invocations`
+
 #### Python Example
 
 ```python
@@ -95,8 +103,10 @@ import mlflow
 import os
 
 # Configuration of tracking URI via Knox
+# All mlflow operations (tracking, registry, artifacts) will go through this URI
 knox_uri = "https://knox-gateway:8443/gateway/sandbox/kirka"
 mlflow.set_tracking_uri(knox_uri)
+mlflow.set_registry_uri(knox_uri)
 
 # If Knox requires authentication (Basic Auth)
 os.environ['MLFLOW_TRACKING_USERNAME'] = 'your_username'
@@ -106,9 +116,14 @@ os.environ['MLFLOW_TRACKING_PASSWORD'] = 'your_password'
 os.environ['MLFLOW_TRACKING_INSECURE_TLS'] = 'true'
 
 # Standard MLFlow usage
-with mlflow.start_run():
+with mlflow.start_run() as run:
     mlflow.log_param("param1", 5)
     mlflow.log_metric("foo", 1.0)
+    
+    # Artifacts are also routed through Knox
+    with open("model.txt", "w") as f:
+        f.write("model data")
+    mlflow.log_artifact("model.txt", "model")
 ```
 
 #### Environment Variables
@@ -182,6 +197,25 @@ The service implements the following MLFlow REST API v2.0 routes:
 - `POST /api/2.0/mlflow/model-versions/update`
 - `POST /api/2.0/mlflow/model-versions/delete`
 - `POST /api/2.0/mlflow/model-versions/transition-stage`
+
+### Prompt Registry
+- `POST /api/2.0/mlflow/prompts/create`
+- `GET /api/2.0/mlflow/prompts/get`
+- `GET /api/2.0/mlflow/prompts/list`
+- `POST /api/2.0/mlflow/prompts/delete`
+
+### Scorer Management
+- `GET /api/2.0/mlflow/scorers/list`
+- `GET /api/2.0/mlflow/scorers/versions`
+- `POST /api/2.0/mlflow/scorers/register`
+- `GET /api/2.0/mlflow/scorers/get`
+- `DELETE /api/2.0/mlflow/scorers/delete`
+
+### AI Gateway
+- `POST /api/2.0/mlflow/gateway/routes`
+- `GET /api/2.0/mlflow/gateway/routes`
+- `GET /api/2.0/mlflow/gateway/routes/{name}`
+- `POST /api/2.0/mlflow/gateway/query/{name}`
 
 ## License
 

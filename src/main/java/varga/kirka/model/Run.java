@@ -1,19 +1,17 @@
 package varga.kirka.model;
 
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
-import java.util.Map;
+import lombok.NoArgsConstructor;
 
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class Run {
-    private String runId;
-    private String experimentId;
-    private String status;
-    private long startTime;
-    private long endTime;
-    private String artifactUri;
-    private Map<String, String> parameters;
-    private Map<String, Double> metrics;
-    private Map<String, String> tags;
+    private RunInfo info;
+    private RunData data;
+    private RunInputs inputs;
+    private RunOutputs outputs;
 }
