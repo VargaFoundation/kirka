@@ -98,4 +98,40 @@ public class RunControllerTest {
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk());
     }
+
+    @Test
+    public void testSetTag() throws Exception {
+        mockMvc.perform(post("/api/2.0/mlflow/runs/set-tag")
+                .content("{\"run_id\": \"run-1\", \"key\": \"tag1\", \"value\": \"value1\"}")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    public void testDeleteTag() throws Exception {
+        mockMvc.perform(post("/api/2.0/mlflow/runs/delete-tag")
+                .content("{\"run_id\": \"run-1\", \"key\": \"tag1\"}")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    public void testGetMetricHistory() throws Exception {
+        when(runService.getMetricHistory("run-1", "accuracy")).thenReturn(java.util.List.of());
+
+        mockMvc.perform(get("/api/2.0/mlflow/runs/metric-history")
+                .param("run_id", "run-1")
+                .param("metric_key", "accuracy")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.metrics").isArray());
+    }
+
+    @Test
+    public void testLogParameter() throws Exception {
+        mockMvc.perform(post("/api/2.0/mlflow/runs/log-parameter")
+                .content("{\"run_id\": \"run-1\", \"key\": \"learning_rate\", \"value\": \"0.01\"}")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
+    }
 }

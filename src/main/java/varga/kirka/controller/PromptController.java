@@ -27,12 +27,14 @@ public class PromptController {
     }
 
     @lombok.Data
+    @lombok.NoArgsConstructor
     @lombok.AllArgsConstructor
     public static class PromptResponse {
         private Prompt prompt;
     }
 
     @lombok.Data
+    @lombok.NoArgsConstructor
     @lombok.AllArgsConstructor
     public static class PromptsResponse {
         private List<Prompt> prompts;

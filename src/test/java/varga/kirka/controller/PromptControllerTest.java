@@ -55,4 +55,30 @@ public class PromptControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.prompts").isArray());
     }
+
+    @Test
+    public void testGetPrompt() throws Exception {
+        Prompt prompt = Prompt.builder()
+                .id("123")
+                .name("test-prompt")
+                .template("Hello {{name}}")
+                .build();
+        
+        when(promptService.getPrompt("123")).thenReturn(prompt);
+
+        mockMvc.perform(get("/api/2.0/mlflow/prompts/get")
+                .param("id", "123")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.prompt.id").value("123"))
+                .andExpect(jsonPath("$.prompt.name").value("test-prompt"));
+    }
+
+    @Test
+    public void testDeletePrompt() throws Exception {
+        mockMvc.perform(post("/api/2.0/mlflow/prompts/delete")
+                .content("{\"id\": \"123\"}")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
+    }
 }

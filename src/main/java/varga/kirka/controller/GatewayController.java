@@ -1,19 +1,29 @@
 package varga.kirka.controller;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import varga.kirka.model.*;
+import varga.kirka.service.GatewayEndpointService;
+import varga.kirka.service.GatewayRouteService;
+import varga.kirka.service.GatewaySecretService;
+
 import java.util.List;
 import java.util.Map;
-import java.util.ArrayList;
 
 @Slf4j
 @RestController
 @RequestMapping("/api")
 public class GatewayController {
 
-    @org.springframework.beans.factory.annotation.Autowired
-    private varga.kirka.service.GatewaySecretService gatewaySecretService;
+    @Autowired
+    private GatewaySecretService gatewaySecretService;
+
+    @Autowired
+    private GatewayRouteService gatewayRouteService;
+
+    @Autowired
+    private GatewayEndpointService gatewayEndpointService;
 
     @lombok.Data
     public static class CreateSecretRequest {
@@ -85,24 +95,24 @@ public class GatewayController {
         return Map.of("secrets", secrets);
     }
 
-    private final List<GatewayRoute> routes = new ArrayList<>();
-
     @PostMapping("/2.0/mlflow/gateway/routes")
     public Map<String, GatewayRoute> createRoute(@RequestBody GatewayRoute route) {
-        // log.info("Creating gateway route: {}", route.getName());
-        routes.add(route);
-        return Map.of("route", route);
+        log.info("Creating gateway route: {}", route.getName());
+        GatewayRoute created = gatewayRouteService.createRoute(route);
+        return Map.of("route", created);
     }
 
     @GetMapping("/2.0/mlflow/gateway/routes")
     public Map<String, List<GatewayRoute>> listRoutes() {
+        List<GatewayRoute> routes = gatewayRouteService.listRoutes();
         return Map.of("routes", routes);
     }
 
     @GetMapping("/2.0/mlflow/gateway/routes/{name}")
     public Map<String, GatewayRoute> getRoute(@PathVariable String name) {
-        for (GatewayRoute r : routes) {
-            // if (name.equals(r.getName())) return Map.of("route", r);
+        GatewayRoute route = gatewayRouteService.getRoute(name);
+        if (route != null) {
+            return Map.of("route", route);
         }
         return Map.of();
     }
@@ -110,7 +120,6 @@ public class GatewayController {
     @lombok.Data
     public static class GatewayQueryRequest {
         private String name;
-        @RequestBody
         private Map<String, Object> body;
     }
 
@@ -131,37 +140,65 @@ public class GatewayController {
 
     @PatchMapping("/2.0/mlflow/gateway/routes/{name}")
     public Map<String, GatewayRoute> updateRoute(@PathVariable String name, @RequestBody Map<String, Object> request) {
-        // log.info("Updating gateway route secret for: {}", name);
-        for (GatewayRoute r : routes) {
-            // if (name.equals(r.getName())) return Map.of("route", r);
+        log.info("Updating gateway route: {}", name);
+        GatewayRoute updated = gatewayRouteService.updateRoute(name, request);
+        if (updated != null) {
+            return Map.of("route", updated);
         }
         return Map.of();
     }
 
+    @lombok.Data
+    public static class AttachModelRequest {
+        private String endpoint_id;
+        private String model_definition_id;
+        private GatewayModelLinkageType linkage_type;
+        private float weight;
+        private Integer fallback_order;
+        private String created_by;
+    }
+
     @PostMapping("/2.0/mlflow/gateway/endpoints/models/attach")
-    public Map<String, GatewayEndpointModelMapping> attachModel(@RequestBody GatewayEndpointModelConfig request) {
-        // log.info("Attaching model to endpoint");
-        // Mock implementation
-        GatewayEndpointModelMapping mapping = GatewayEndpointModelMapping.builder()
-            // .modelDefinitionId(request.getModelDefinitionId())
-            // .weight(request.getWeight())
-            // .linkageType(request.getLinkageType())
-            // .fallbackOrder(request.getFallbackOrder())
-            .createdAt(System.currentTimeMillis())
-            .build();
+    public Map<String, GatewayEndpointModelMapping> attachModel(@RequestBody AttachModelRequest request) {
+        log.info("Attaching model to endpoint: {}", request.getEndpoint_id());
+        GatewayEndpointModelConfig config = GatewayEndpointModelConfig.builder()
+                .modelDefinitionId(request.getModel_definition_id())
+                .linkageType(request.getLinkage_type())
+                .weight(request.getWeight())
+                .fallbackOrder(request.getFallback_order())
+                .build();
+        GatewayEndpointModelMapping mapping = gatewayEndpointService.attachModel(
+                request.getEndpoint_id(), config, request.getCreated_by());
         return Map.of("mapping", mapping);
     }
 
+    @lombok.Data
+    public static class DetachModelRequest {
+        private String endpoint_id;
+        private String mapping_id;
+    }
+
     @PostMapping("/2.0/mlflow/gateway/endpoints/models/detach")
-    public void detachModel(@RequestBody GatewayEndpointModelMapping request) {
-        // log.info("Detaching model {} from endpoint {}", request.getModelDefinitionId(), request.getEndpointId());
-        // Mock implementation
+    public void detachModel(@RequestBody DetachModelRequest request) {
+        log.info("Detaching model {} from endpoint {}", request.getMapping_id(), request.getEndpoint_id());
+        gatewayEndpointService.detachModel(request.getEndpoint_id(), request.getMapping_id());
+    }
+
+    @lombok.Data
+    public static class SetTagRequest {
+        private String endpoint_id;
+        private String key;
+        private String value;
     }
 
     @PostMapping("/2.0/mlflow/gateway/endpoints/set-tag")
-    public void setTag(@RequestBody GatewayEndpointTag request) {
-        // log.info("Setting tag {}={} on endpoint", request.getKey(), request.getValue());
-        // Mock implementation
+    public void setTag(@RequestBody SetTagRequest request) {
+        log.info("Setting tag {}={} on endpoint {}", request.getKey(), request.getValue(), request.getEndpoint_id());
+        GatewayEndpointTag tag = GatewayEndpointTag.builder()
+                .key(request.getKey())
+                .value(request.getValue())
+                .build();
+        gatewayEndpointService.setTag(request.getEndpoint_id(), tag);
     }
 
     @PostMapping("/invocations")
@@ -197,10 +234,10 @@ public class GatewayController {
         String eid = endpoint_id;
         String k = key;
         if (body != null) {
-            // if (eid == null) eid = body.getEndpoint_id();
-            // if (k == null) k = body.getKey();
+            if (eid == null) eid = body.getEndpoint_id();
+            if (k == null) k = body.getKey();
         }
-        // log.info("Deleting tag {} from endpoint {}", k, eid);
-        // Mock implementation
+        log.info("Deleting tag {} from endpoint {}", k, eid);
+        gatewayEndpointService.deleteTag(eid, k);
     }
 }

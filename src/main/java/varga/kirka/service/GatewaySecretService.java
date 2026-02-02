@@ -1,18 +1,23 @@
 package varga.kirka.service;
 
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import varga.kirka.model.AuthConfigEntry;
 import varga.kirka.model.GatewaySecretInfo;
 import varga.kirka.model.MaskedValuesEntry;
 import varga.kirka.model.SecretValueEntry;
+import varga.kirka.repo.GatewaySecretRepository;
 
+import java.io.IOException;
 import java.util.*;
-import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 public class GatewaySecretService {
-    private final Map<String, GatewaySecretInfo> secretsById = new HashMap<>();
-    private final Map<String, List<SecretValueEntry>> secretValues = new HashMap<>();
+
+    @Autowired
+    private GatewaySecretRepository gatewaySecretRepository;
 
     public GatewaySecretInfo createSecret(String name, List<SecretValueEntry> value, String provider, List<AuthConfigEntry> authConfig, String createdBy) {
         String id = UUID.randomUUID().toString();
@@ -39,13 +44,24 @@ public class GatewaySecretService {
                 .authConfig(authConfig)
                 .build();
 
-        secretsById.put(id, secretInfo);
-        secretValues.put(id, value);
+        try {
+            gatewaySecretRepository.saveSecret(secretInfo, value);
+        } catch (IOException e) {
+            log.error("Failed to save secret to HBase", e);
+            throw new RuntimeException("Failed to create secret", e);
+        }
         return secretInfo;
     }
 
     public GatewaySecretInfo updateSecret(String id, List<SecretValueEntry> value, List<AuthConfigEntry> authConfig, String updatedBy) {
-        GatewaySecretInfo existing = secretsById.get(id);
+        GatewaySecretInfo existing;
+        try {
+            existing = gatewaySecretRepository.getSecretById(id);
+        } catch (IOException e) {
+            log.error("Failed to get secret from HBase", e);
+            throw new RuntimeException("Failed to get secret", e);
+        }
+
         if (existing == null) {
             throw new RuntimeException("Secret not found: " + id);
         }
@@ -53,8 +69,8 @@ public class GatewaySecretService {
         existing.setLastUpdatedAt(System.currentTimeMillis());
         existing.setLastUpdatedBy(updatedBy);
 
+        List<SecretValueEntry> secretValues = value;
         if (value != null && !value.isEmpty()) {
-            secretValues.put(id, value);
             List<MaskedValuesEntry> maskedValues = new ArrayList<>();
             for (SecretValueEntry entry : value) {
                 MaskedValuesEntry masked = new MaskedValuesEntry();
@@ -63,44 +79,59 @@ public class GatewaySecretService {
                 maskedValues.add(masked);
             }
             existing.setMaskedValues(maskedValues);
+        } else {
+            try {
+                secretValues = gatewaySecretRepository.getSecretValues(id);
+            } catch (IOException e) {
+                log.error("Failed to get secret values from HBase", e);
+                throw new RuntimeException("Failed to get secret values", e);
+            }
         }
 
         if (authConfig != null) {
             existing.setAuthConfig(authConfig);
         }
 
+        try {
+            gatewaySecretRepository.saveSecret(existing, secretValues);
+        } catch (IOException e) {
+            log.error("Failed to update secret in HBase", e);
+            throw new RuntimeException("Failed to update secret", e);
+        }
+
         return existing;
     }
 
     public void deleteSecret(String id) {
-        secretsById.remove(id);
-        secretValues.remove(id);
+        try {
+            gatewaySecretRepository.deleteSecret(id);
+        } catch (IOException e) {
+            log.error("Failed to delete secret from HBase", e);
+            throw new RuntimeException("Failed to delete secret", e);
+        }
     }
 
     public GatewaySecretInfo getSecret(String id, String name) {
-        if (id != null) {
-            return secretsById.get(id);
-        }
-        if (name != null) {
-            for (GatewaySecretInfo s : secretsById.values()) {
-                if (name.equals(s.getSecretName())) {
-                    return s;
-                }
+        try {
+            if (id != null) {
+                return gatewaySecretRepository.getSecretById(id);
             }
+            if (name != null) {
+                return gatewaySecretRepository.getSecretByName(name);
+            }
+        } catch (IOException e) {
+            log.error("Failed to get secret from HBase", e);
+            throw new RuntimeException("Failed to get secret", e);
         }
         return null;
     }
 
     public List<GatewaySecretInfo> listSecrets(String provider) {
-        if (provider == null) {
-            return new ArrayList<>(secretsById.values());
+        try {
+            return gatewaySecretRepository.listSecrets(provider);
+        } catch (IOException e) {
+            log.error("Failed to list secrets from HBase", e);
+            throw new RuntimeException("Failed to list secrets", e);
         }
-        List<GatewaySecretInfo> filtered = new ArrayList<>();
-        for (GatewaySecretInfo s : secretsById.values()) {
-            if (provider.equals(s.getProvider())) {
-                filtered.add(s);
-            }
-        }
-        return filtered;
     }
 }

@@ -10,6 +10,9 @@ import varga.kirka.model.Experiment;
 import varga.kirka.service.ExperimentService;
 
 import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(ExperimentController.class)
 public class ExperimentControllerTest {
@@ -78,5 +81,41 @@ public class ExperimentControllerTest {
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.experiments").isArray());
+    }
+
+    @Test
+    public void testGetExperimentByName() throws Exception {
+        Experiment experiment = Experiment.builder().experimentId("123").name("test-exp").build();
+        when(experimentService.getExperimentByName("test-exp")).thenReturn(experiment);
+        
+        mockMvc.perform(get("/api/2.0/mlflow/experiments/get-by-name")
+                .param("experiment_name", "test-exp")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.experiment.name").value("test-exp"));
+    }
+
+    @Test
+    public void testRestoreExperiment() throws Exception {
+        mockMvc.perform(post("/api/2.0/mlflow/experiments/restore")
+                .content("{\"experiment_id\": \"123\"}")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    public void testSetExperimentTag() throws Exception {
+        mockMvc.perform(post("/api/2.0/mlflow/experiments/set-experiment-tag")
+                .content("{\"experiment_id\": \"123\", \"key\": \"tag1\", \"value\": \"value1\"}")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    public void testSetTag() throws Exception {
+        mockMvc.perform(post("/api/2.0/mlflow/experiments/set-tag")
+                .content("{\"experiment_id\": \"123\", \"key\": \"tag1\", \"value\": \"value1\"}")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
     }
 }

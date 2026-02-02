@@ -11,7 +11,7 @@ import varga.kirka.service.ModelRegistryService;
 
 import java.util.List;
 
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -82,5 +82,94 @@ public class ModelRegistryControllerTest {
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.registered_models").isArray());
+    }
+
+    @Test
+    public void testGetRegisteredModel() throws Exception {
+        RegisteredModel model = RegisteredModel.builder().name("model1").build();
+        when(modelRegistryService.getRegisteredModel("model1")).thenReturn(model);
+
+        mockMvc.perform(get("/api/2.0/mlflow/registered-models/get")
+                .param("name", "model1")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.registered_model.name").value("model1"));
+    }
+
+    @Test
+    public void testUpdateRegisteredModel() throws Exception {
+        mockMvc.perform(post("/api/2.0/mlflow/registered-models/update")
+                .content("{\"name\": \"model1\", \"description\": \"Updated description\"}")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    public void testDeleteRegisteredModel() throws Exception {
+        mockMvc.perform(post("/api/2.0/mlflow/registered-models/delete")
+                .content("{\"name\": \"model1\"}")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    public void testGetModelVersion() throws Exception {
+        varga.kirka.model.ModelVersion version = varga.kirka.model.ModelVersion.builder().name("m1").version("1").build();
+        when(modelRegistryService.getModelVersion("m1", "1")).thenReturn(version);
+
+        mockMvc.perform(get("/api/2.0/mlflow/model-versions/get")
+                .param("name", "m1")
+                .param("version", "1")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.model_version.name").value("m1"));
+    }
+
+    @Test
+    public void testUpdateModelVersion() throws Exception {
+        mockMvc.perform(post("/api/2.0/mlflow/model-versions/update")
+                .content("{\"name\": \"m1\", \"version\": \"1\", \"description\": \"Updated\"}")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    public void testDeleteModelVersion() throws Exception {
+        mockMvc.perform(post("/api/2.0/mlflow/model-versions/delete")
+                .content("{\"name\": \"m1\", \"version\": \"1\"}")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    public void testSetRegisteredModelTag() throws Exception {
+        mockMvc.perform(post("/api/2.0/mlflow/registered-models/set-tag")
+                .content("{\"name\": \"model1\", \"key\": \"tag1\", \"value\": \"value1\"}")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    public void testDeleteRegisteredModelTag() throws Exception {
+        mockMvc.perform(post("/api/2.0/mlflow/registered-models/delete-tag")
+                .content("{\"name\": \"model1\", \"key\": \"tag1\"}")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    public void testSetModelVersionTag() throws Exception {
+        mockMvc.perform(post("/api/2.0/mlflow/model-versions/set-tag")
+                .content("{\"name\": \"m1\", \"version\": \"1\", \"key\": \"tag1\", \"value\": \"value1\"}")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    public void testDeleteModelVersionTag() throws Exception {
+        mockMvc.perform(post("/api/2.0/mlflow/model-versions/delete-tag")
+                .content("{\"name\": \"m1\", \"version\": \"1\", \"key\": \"tag1\"}")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
     }
 }

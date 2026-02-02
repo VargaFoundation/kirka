@@ -78,4 +78,19 @@ public class ScorerControllerTest {
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk());
     }
+
+    @Test
+    public void testListScorerVersions() throws Exception {
+        Scorer v1 = Scorer.builder().scorerName("scorer1").scorerVersion(1).build();
+        Scorer v2 = Scorer.builder().scorerName("scorer1").scorerVersion(2).build();
+        when(scorerService.listScorerVersions("1", "scorer1")).thenReturn(List.of(v1, v2));
+
+        mockMvc.perform(get("/api/2.0/mlflow/scorers/versions")
+                .param("experiment_id", "1")
+                .param("name", "scorer1")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.scorers").isArray())
+                .andExpect(jsonPath("$.scorers.length()").value(2));
+    }
 }
