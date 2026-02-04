@@ -21,7 +21,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
     "spring.main.allow-bean-definition-overriding=true",
     "security.kerberos.enabled=false"
 })
-@Import(AbstractHBaseIntegrationTest.HBaseTestConfig.class)
 public class ArtifactRepositoryIntegrationTest extends AbstractHBaseIntegrationTest {
 
     @Autowired

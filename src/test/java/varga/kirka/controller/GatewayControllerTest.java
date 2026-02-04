@@ -2,6 +2,7 @@ package varga.kirka.controller;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.http.MediaType;
 import org.springframework.boot.test.mock.mockito.MockBean;
@@ -23,6 +24,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(GatewayController.class)
+@AutoConfigureMockMvc(addFilters = false)
 public class GatewayControllerTest {
 
     @Autowired
@@ -268,6 +270,6 @@ public class GatewayControllerTest {
     public void testMetadata() throws Exception {
         mockMvc.perform(get("/api/metadata"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.model_name").value("mock-model"));
+                .andExpect(jsonPath("$.model_name").value("kirka"));
     }
 }

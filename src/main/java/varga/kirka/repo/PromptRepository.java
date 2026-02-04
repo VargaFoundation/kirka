@@ -28,19 +28,26 @@ public class PromptRepository {
     private static final byte[] COL_DESCRIPTION = Bytes.toBytes("description");
     private static final byte[] COL_CREATION_TIME = Bytes.toBytes("creation_time");
     private static final byte[] COL_LAST_UPDATE_TIME = Bytes.toBytes("last_update_time");
+    private static final byte[] COL_OWNER = Bytes.toBytes("owner");
 
     @Autowired
     private Connection connection;
 
     public void createPrompt(Prompt prompt) throws IOException {
         try (Table table = connection.getTable(TableName.valueOf(TABLE_NAME))) {
-            Put put = new Put(Bytes.toBytes("mock_id"));
-            /*
+            if (prompt.getId() == null || prompt.getId().isBlank()) {
+                throw new IllegalArgumentException("Prompt id must be provided");
+            }
+
+            Put put = new Put(Bytes.toBytes(prompt.getId()));
             put.addColumn(CF_INFO, COL_NAME, Bytes.toBytes(prompt.getName()));
             put.addColumn(CF_INFO, COL_VERSION, Bytes.toBytes(prompt.getVersion()));
             put.addColumn(CF_INFO, COL_TEMPLATE, Bytes.toBytes(prompt.getTemplate()));
             if (prompt.getDescription() != null) {
                 put.addColumn(CF_INFO, COL_DESCRIPTION, Bytes.toBytes(prompt.getDescription()));
+            }
+            if (prompt.getOwner() != null) {
+                put.addColumn(CF_INFO, COL_OWNER, Bytes.toBytes(prompt.getOwner()));
             }
             put.addColumn(CF_INFO, COL_CREATION_TIME, Bytes.toBytes(prompt.getCreationTimestamp()));
             put.addColumn(CF_INFO, COL_LAST_UPDATE_TIME, Bytes.toBytes(prompt.getLastUpdatedTimestamp()));
@@ -50,7 +57,6 @@ public class PromptRepository {
                     put.addColumn(CF_TAGS, Bytes.toBytes(entry.getKey()), Bytes.toBytes(entry.getValue()));
                 }
             }
-            */
             table.put(put);
         }
     }
@@ -92,16 +98,27 @@ public class PromptRepository {
         }
 
         Prompt prompt = new Prompt();
-        /*
         prompt.setId(Bytes.toString(result.getRow()));
         prompt.setName(Bytes.toString(result.getValue(CF_INFO, COL_NAME)));
         prompt.setVersion(Bytes.toString(result.getValue(CF_INFO, COL_VERSION)));
         prompt.setTemplate(Bytes.toString(result.getValue(CF_INFO, COL_TEMPLATE)));
-        prompt.setDescription(Bytes.toString(result.getValue(CF_INFO, COL_DESCRIPTION)));
-        prompt.setCreationTimestamp(Bytes.toLong(result.getValue(CF_INFO, COL_CREATION_TIME)));
-        prompt.setLastUpdatedTimestamp(Bytes.toLong(result.getValue(CF_INFO, COL_LAST_UPDATE_TIME)));
+        byte[] descriptionBytes = result.getValue(CF_INFO, COL_DESCRIPTION);
+        if (descriptionBytes != null) {
+            prompt.setDescription(Bytes.toString(descriptionBytes));
+        }
+        byte[] ownerBytes = result.getValue(CF_INFO, COL_OWNER);
+        if (ownerBytes != null) {
+            prompt.setOwner(Bytes.toString(ownerBytes));
+        }
+        byte[] creationTimeBytes = result.getValue(CF_INFO, COL_CREATION_TIME);
+        if (creationTimeBytes != null) {
+            prompt.setCreationTimestamp(Bytes.toLong(creationTimeBytes));
+        }
+        byte[] lastUpdateTimeBytes = result.getValue(CF_INFO, COL_LAST_UPDATE_TIME);
+        if (lastUpdateTimeBytes != null) {
+            prompt.setLastUpdatedTimestamp(Bytes.toLong(lastUpdateTimeBytes));
+        }
         prompt.setTags(tags);
-        */
         return prompt;
     }
 }

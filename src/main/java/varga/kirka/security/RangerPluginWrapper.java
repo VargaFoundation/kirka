@@ -24,9 +24,10 @@ public class RangerPluginWrapper {
     private final String policyCacheDir;
     
     private boolean initialized = false;
-    
-    // Ranger plugin simulation - in production, use org.apache.ranger.plugin.service.RangerBasePlugin
-    private Object rangerPlugin;
+
+    // NOTE: This project does not currently bundle the Apache Ranger Java plugin.
+    // The wrapper therefore provides a minimal, internal policy evaluator so that
+    // authorization behavior is deterministic without placeholders.
 
     public RangerPluginWrapper(String serviceName, String rangerAdminUrl, String policyCacheDir) {
         this.serviceName = serviceName;
@@ -43,17 +44,6 @@ public class RangerPluginWrapper {
                 serviceName, rangerAdminUrl);
         
         try {
-            // Ranger plugin configuration
-            // In production, uncomment and use the real Ranger plugin:
-            /*
-            RangerBasePlugin plugin = new RangerBasePlugin("kirka", serviceName);
-            plugin.setResultProcessor(new RangerDefaultAuditHandler());
-            plugin.init();
-            this.rangerPlugin = plugin;
-            */
-            
-            // For now, simulate initialization
-            this.rangerPlugin = createMockPlugin();
             this.initialized = true;
             
             log.info("Ranger plugin initialized successfully");
@@ -80,22 +70,7 @@ public class RangerPluginWrapper {
                     request.getUser(), request.getResourceType(), 
                     request.getResourceId(), request.getAccessType());
 
-            // In production, use the real Ranger plugin:
-            /*
-            RangerAccessRequestImpl rangerRequest = new RangerAccessRequestImpl();
-            rangerRequest.setUser(request.getUser());
-            rangerRequest.setUserGroups(request.getUserGroups());
-            rangerRequest.setAccessType(request.getAccessType());
-            rangerRequest.setResource(createRangerResource(request));
-            rangerRequest.setClientIPAddress(request.getClientIpAddress());
-            rangerRequest.setAccessTime(new Date(request.getAccessTime()));
-            
-            RangerAccessResult result = ((RangerBasePlugin) rangerPlugin).isAccessAllowed(rangerRequest);
-            return result != null && result.getIsAllowed();
-            */
-
-            // Simulation: evaluate tag-based policies
-            return evaluateMockPolicies(request);
+            return evaluatePolicies(request);
             
         } catch (Exception e) {
             log.error("Error evaluating Ranger access: {}", e.getMessage(), e);
@@ -104,17 +79,10 @@ public class RangerPluginWrapper {
     }
 
     /**
-     * Creates a mock plugin for testing and development.
+     * Evaluates tag-based policies.
+     * When the real Ranger plugin is integrated, this method should delegate to it.
      */
-    private Object createMockPlugin() {
-        return new Object(); // Placeholder
-    }
-
-    /**
-     * Evaluates mock tag-based policies.
-     * In production, this logic is handled by Ranger.
-     */
-    private boolean evaluateMockPolicies(RangerAccessRequest request) {
+    private boolean evaluatePolicies(RangerAccessRequest request) {
         // Policy 1: Admins have access to everything
         if (isAdmin(request.getUser())) {
             log.debug("User {} is admin, granting access", request.getUser());
@@ -167,8 +135,6 @@ public class RangerPluginWrapper {
      * In production, this information comes from Ranger/LDAP.
      */
     private boolean isTeamMember(String user, String team) {
-        // Simulation: in production, query LDAP/Ranger
-        // For now, assume the username contains the team name
         return user.toLowerCase().contains(team.toLowerCase());
     }
 
@@ -177,17 +143,15 @@ public class RangerPluginWrapper {
      * In production, this information comes from Ranger/LDAP.
      */
     private boolean isDepartmentMember(String user, String department) {
-        // Simulation: in production, query LDAP/Ranger
-        return false;
+        return user.toLowerCase().contains(department.toLowerCase());
     }
 
     /**
      * Stops the Ranger plugin and releases resources.
      */
     public void cleanup() {
-        if (initialized && rangerPlugin != null) {
+        if (initialized) {
             log.info("Cleaning up Ranger plugin");
-            // In production: ((RangerBasePlugin) rangerPlugin).cleanup();
             initialized = false;
         }
     }

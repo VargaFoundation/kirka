@@ -35,7 +35,9 @@ public class ExperimentRepository {
         try (Table table = connection.getTable(TableName.valueOf(TABLE_NAME))) {
             Put put = new Put(Bytes.toBytes(experiment.getExperimentId()));
             put.addColumn(CF_INFO, COL_NAME, Bytes.toBytes(experiment.getName()));
-            put.addColumn(CF_INFO, COL_ARTIFACT_LOCATION, Bytes.toBytes(experiment.getArtifactLocation()));
+            if (experiment.getArtifactLocation() != null) {
+                put.addColumn(CF_INFO, COL_ARTIFACT_LOCATION, Bytes.toBytes(experiment.getArtifactLocation()));
+            }
             put.addColumn(CF_INFO, COL_LIFECYCLE_STAGE, Bytes.toBytes(experiment.getLifecycleStage()));
             put.addColumn(CF_INFO, COL_CREATION_TIME, Bytes.toBytes(experiment.getCreationTime()));
             put.addColumn(CF_INFO, COL_LAST_UPDATE_TIME, Bytes.toBytes(experiment.getLastUpdateTime()));

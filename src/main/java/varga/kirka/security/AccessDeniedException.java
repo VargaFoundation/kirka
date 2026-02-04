@@ -4,9 +4,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ResponseStatus;
 
 /**
- * Exception levée quand l'accès à une ressource est refusé.
+ * Exception thrown when access to a resource is denied.
  */
-@ResponseStatus(HttpStatus.FORBIDDEN)
 public class AccessDeniedException extends RuntimeException {
 
     private final String resourceType;

@@ -2,6 +2,7 @@ package varga.kirka.controller;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
 import varga.kirka.model.*;
 import varga.kirka.service.GatewayEndpointService;
@@ -18,6 +19,9 @@ public class GatewayController {
 
     @Autowired
     private GatewaySecretService gatewaySecretService;
+
+    @Value("${spring.application.name:kirka}")
+    private String applicationName;
 
     @Autowired
     private GatewayRouteService gatewayRouteService;
@@ -131,11 +135,16 @@ public class GatewayController {
 
     @PostMapping("/2.0/mlflow/gateway/query/{name}")
     public GatewayQueryResponse queryRoute(@PathVariable String name, @RequestBody Map<String, Object> request) {
-        // log.info("Querying gateway route: {}", name);
-        // Mock response for gateway query
-        return new GatewayQueryResponse(List.of(
-                Map.of("text", "Ceci est une réponse simulée du gateway pour " + name)
-        ));
+        log.info("Querying gateway route: {}", name);
+        GatewayRoute route = gatewayRouteService.getRoute(name);
+        if (route == null) {
+            log.warn("Gateway route not found: {}", name);
+            return new GatewayQueryResponse(List.of());
+        }
+
+        // Query execution is provider-specific and is not implemented in this service yet.
+        // For now, return an empty candidate list while keeping a stable response schema.
+        return new GatewayQueryResponse(List.of());
     }
 
     @PatchMapping("/2.0/mlflow/gateway/routes/{name}")
@@ -218,7 +227,7 @@ public class GatewayController {
 
     @GetMapping("/metadata")
     public Map<String, Object> metadata() {
-        return Map.of("model_name", "mock-model");
+        return Map.of("model_name", applicationName);
     }
 
     @lombok.Data

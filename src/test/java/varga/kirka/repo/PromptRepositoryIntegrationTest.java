@@ -15,7 +15,6 @@ import static org.junit.jupiter.api.Assertions.*;
     "spring.main.allow-bean-definition-overriding=true",
     "security.kerberos.enabled=false"
 })
-@Import(AbstractHBaseIntegrationTest.HBaseTestConfig.class)
 public class PromptRepositoryIntegrationTest extends AbstractHBaseIntegrationTest {
 
     @Autowired
@@ -36,9 +35,12 @@ public class PromptRepositoryIntegrationTest extends AbstractHBaseIntegrationTes
         promptRepository.createPrompt(prompt);
 
         Prompt retrieved = promptRepository.getPrompt("prompt-1");
-        // Note: The current implementation uses "mock_id" as row key, 
-        // so this test validates the basic flow
         assertNotNull(retrieved);
+        assertEquals("prompt-1", retrieved.getId());
+        assertEquals("test-prompt", retrieved.getName());
+        assertEquals("1", retrieved.getVersion());
+        assertEquals("Hello {{name}}", retrieved.getTemplate());
+        assertEquals("A test prompt", retrieved.getDescription());
     }
 
     @Test
