@@ -24,6 +24,7 @@ public class ExperimentRepository {
     private static final byte[] COL_LIFECYCLE_STAGE = Bytes.toBytes("lifecycle_stage");
     private static final byte[] COL_CREATION_TIME = Bytes.toBytes("creation_time");
     private static final byte[] COL_LAST_UPDATE_TIME = Bytes.toBytes("last_update_time");
+    private static final byte[] COL_OWNER = Bytes.toBytes("owner");
     private static final byte[] CF_TAGS = Bytes.toBytes("tags");
 
     @Autowired
@@ -38,6 +39,10 @@ public class ExperimentRepository {
             put.addColumn(CF_INFO, COL_LIFECYCLE_STAGE, Bytes.toBytes(experiment.getLifecycleStage()));
             put.addColumn(CF_INFO, COL_CREATION_TIME, Bytes.toBytes(experiment.getCreationTime()));
             put.addColumn(CF_INFO, COL_LAST_UPDATE_TIME, Bytes.toBytes(experiment.getLastUpdateTime()));
+            
+            if (experiment.getOwner() != null) {
+                put.addColumn(CF_INFO, COL_OWNER, Bytes.toBytes(experiment.getOwner()));
+            }
             
             if (experiment.getTags() != null) {
                 for (ExperimentTag tag : experiment.getTags()) {
@@ -129,6 +134,7 @@ public class ExperimentRepository {
     }
 
     private Experiment mapResultToExperiment(Result result) {
+        byte[] ownerBytes = result.getValue(CF_INFO, COL_OWNER);
         return Experiment.builder()
                 .experimentId(Bytes.toString(result.getRow()))
                 .name(Bytes.toString(result.getValue(CF_INFO, COL_NAME)))
@@ -137,6 +143,7 @@ public class ExperimentRepository {
                 .creationTime(Bytes.toLong(result.getValue(CF_INFO, COL_CREATION_TIME)))
                 .lastUpdateTime(Bytes.toLong(result.getValue(CF_INFO, COL_LAST_UPDATE_TIME)))
                 .tags(extractTags(result))
+                .owner(ownerBytes != null ? Bytes.toString(ownerBytes) : null)
                 .build();
     }
 }

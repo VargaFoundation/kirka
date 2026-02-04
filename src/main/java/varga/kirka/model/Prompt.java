@@ -19,4 +19,6 @@ public class Prompt {
     private long creationTimestamp;
     private long lastUpdatedTimestamp;
     private Map<String, String> tags;
+    /** Owner of the prompt (user who created it) */
+    private String owner;
 }

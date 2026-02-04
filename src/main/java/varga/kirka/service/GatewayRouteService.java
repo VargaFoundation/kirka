@@ -5,20 +5,30 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import varga.kirka.model.GatewayRoute;
 import varga.kirka.repo.GatewayRouteRepository;
+import varga.kirka.security.SecurityContextHelper;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
 public class GatewayRouteService {
 
+    private static final String RESOURCE_TYPE = "route";
+
     @Autowired
     private GatewayRouteRepository gatewayRouteRepository;
 
+    @Autowired
+    private SecurityContextHelper securityContextHelper;
+
     public GatewayRoute createRoute(GatewayRoute route) {
         try {
+            // Set current user as owner
+            String currentUser = securityContextHelper.getCurrentUser();
+            route.setCreatedBy(currentUser);
             gatewayRouteRepository.saveRoute(route);
         } catch (IOException e) {
             log.error("Failed to save route to HBase", e);
@@ -29,7 +39,11 @@ public class GatewayRouteService {
 
     public GatewayRoute getRoute(String name) {
         try {
-            return gatewayRouteRepository.getRouteByName(name);
+            GatewayRoute route = gatewayRouteRepository.getRouteByName(name);
+            if (route != null) {
+                securityContextHelper.checkReadAccess(RESOURCE_TYPE, name, route.getCreatedBy(), Map.of());
+            }
+            return route;
         } catch (IOException e) {
             log.error("Failed to get route from HBase", e);
             throw new RuntimeException("Failed to get route", e);
@@ -38,7 +52,12 @@ public class GatewayRouteService {
 
     public List<GatewayRoute> listRoutes() {
         try {
-            return gatewayRouteRepository.listRoutes();
+            List<GatewayRoute> routes = gatewayRouteRepository.listRoutes();
+            // Filter routes based on read access
+            return routes.stream()
+                    .filter(route -> securityContextHelper.canRead(RESOURCE_TYPE, route.getName(), 
+                            route.getCreatedBy(), Map.of()))
+                    .collect(Collectors.toList());
         } catch (IOException e) {
             log.error("Failed to list routes from HBase", e);
             throw new RuntimeException("Failed to list routes", e);
@@ -51,6 +70,9 @@ public class GatewayRouteService {
             if (existing == null) {
                 throw new RuntimeException("Route not found: " + name);
             }
+
+            // Check write access
+            securityContextHelper.checkWriteAccess(RESOURCE_TYPE, name, existing.getCreatedBy(), Map.of());
 
             if (updates.containsKey("route_type")) {
                 existing.setRouteType((String) updates.get("route_type"));
@@ -77,6 +99,10 @@ public class GatewayRouteService {
 
     public void deleteRoute(String name) {
         try {
+            GatewayRoute route = gatewayRouteRepository.getRouteByName(name);
+            if (route != null) {
+                securityContextHelper.checkDeleteAccess(RESOURCE_TYPE, name, route.getCreatedBy(), Map.of());
+            }
             gatewayRouteRepository.deleteRoute(name);
         } catch (IOException e) {
             log.error("Failed to delete route from HBase", e);

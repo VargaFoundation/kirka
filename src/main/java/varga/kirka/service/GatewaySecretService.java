@@ -8,19 +8,29 @@ import varga.kirka.model.GatewaySecretInfo;
 import varga.kirka.model.MaskedValuesEntry;
 import varga.kirka.model.SecretValueEntry;
 import varga.kirka.repo.GatewaySecretRepository;
+import varga.kirka.security.SecurityContextHelper;
 
 import java.io.IOException;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
 public class GatewaySecretService {
 
+    private static final String RESOURCE_TYPE = "secret";
+
     @Autowired
     private GatewaySecretRepository gatewaySecretRepository;
 
+    @Autowired
+    private SecurityContextHelper securityContextHelper;
+
     public GatewaySecretInfo createSecret(String name, List<SecretValueEntry> value, String provider, List<AuthConfigEntry> authConfig, String createdBy) {
         String id = UUID.randomUUID().toString();
+        // Use current user as owner
+        String currentUser = securityContextHelper.getCurrentUser();
+        String owner = currentUser != null ? currentUser : createdBy;
         
         List<MaskedValuesEntry> maskedValues = new ArrayList<>();
         if (value != null) {
@@ -39,8 +49,8 @@ public class GatewaySecretService {
                 .createdAt(System.currentTimeMillis())
                 .lastUpdatedAt(System.currentTimeMillis())
                 .provider(provider)
-                .createdBy(createdBy)
-                .lastUpdatedBy(createdBy)
+                .createdBy(owner)
+                .lastUpdatedBy(owner)
                 .authConfig(authConfig)
                 .build();
 
@@ -65,6 +75,9 @@ public class GatewaySecretService {
         if (existing == null) {
             throw new RuntimeException("Secret not found: " + id);
         }
+
+        // Check write access
+        securityContextHelper.checkWriteAccess(RESOURCE_TYPE, id, existing.getCreatedBy(), Map.of());
 
         existing.setLastUpdatedAt(System.currentTimeMillis());
         existing.setLastUpdatedBy(updatedBy);
@@ -104,6 +117,10 @@ public class GatewaySecretService {
 
     public void deleteSecret(String id) {
         try {
+            GatewaySecretInfo secret = gatewaySecretRepository.getSecretById(id);
+            if (secret != null) {
+                securityContextHelper.checkDeleteAccess(RESOURCE_TYPE, id, secret.getCreatedBy(), Map.of());
+            }
             gatewaySecretRepository.deleteSecret(id);
         } catch (IOException e) {
             log.error("Failed to delete secret from HBase", e);
@@ -113,22 +130,30 @@ public class GatewaySecretService {
 
     public GatewaySecretInfo getSecret(String id, String name) {
         try {
+            GatewaySecretInfo secret = null;
             if (id != null) {
-                return gatewaySecretRepository.getSecretById(id);
+                secret = gatewaySecretRepository.getSecretById(id);
+            } else if (name != null) {
+                secret = gatewaySecretRepository.getSecretByName(name);
             }
-            if (name != null) {
-                return gatewaySecretRepository.getSecretByName(name);
+            if (secret != null) {
+                securityContextHelper.checkReadAccess(RESOURCE_TYPE, secret.getSecretId(), secret.getCreatedBy(), Map.of());
             }
+            return secret;
         } catch (IOException e) {
             log.error("Failed to get secret from HBase", e);
             throw new RuntimeException("Failed to get secret", e);
         }
-        return null;
     }
 
     public List<GatewaySecretInfo> listSecrets(String provider) {
         try {
-            return gatewaySecretRepository.listSecrets(provider);
+            List<GatewaySecretInfo> secrets = gatewaySecretRepository.listSecrets(provider);
+            // Filter secrets based on read access
+            return secrets.stream()
+                    .filter(secret -> securityContextHelper.canRead(RESOURCE_TYPE, secret.getSecretId(), 
+                            secret.getCreatedBy(), Map.of()))
+                    .collect(Collectors.toList());
         } catch (IOException e) {
             log.error("Failed to list secrets from HBase", e);
             throw new RuntimeException("Failed to list secrets", e);

@@ -63,7 +63,7 @@ public class ArtifactController {
             fullPath = baseUri + (baseUri.endsWith("/") ? "" : "/") + path;
         }
         
-        // S'assurer que le nom du fichier est inclus dans le chemin HDFS
+        // Ensure the file name is included in the HDFS path
         String fileName = file.getOriginalFilename();
         String hdfsPath = fullPath + (fullPath.endsWith("/") ? "" : "/") + fileName;
 

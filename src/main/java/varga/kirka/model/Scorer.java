@@ -16,4 +16,6 @@ public class Scorer {
     private String serializedScorer;
     private long creationTime;
     private String scorerId;
+    /** Owner of the scorer (user who created it) */
+    private String owner;
 }

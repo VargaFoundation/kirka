@@ -18,4 +18,6 @@ public class Experiment {
     private long lastUpdateTime;
     private long creationTime;
     private List<ExperimentTag> tags;
+    /** Owner of the experiment (user who created it) */
+    private String owner;
 }

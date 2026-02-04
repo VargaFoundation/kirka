@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Configuration du plugin Ranger pour Kirka.
+  Ce fichier configure la connexion au serveur Ranger Admin et les paramètres du plugin.
+-->
+<configuration>
+    <!-- Nom du service Ranger (doit correspondre au service créé dans Ranger Admin) -->
+    <property>
+        <name>ranger.plugin.kirka.service.name</name>
+        <value>kirka</value>
+    </property>
+
+    <!-- URL du serveur Ranger Admin -->
+    <property>
+        <name>ranger.plugin.kirka.policy.rest.url</name>
+        <value>http://localhost:6080</value>
+    </property>
+
+    <!-- Intervalle de rafraîchissement des politiques (en millisecondes) -->
+    <property>
+        <name>ranger.plugin.kirka.policy.pollIntervalMs</name>
+        <value>30000</value>
+    </property>
+
+    <!-- Répertoire de cache des politiques -->
+    <property>
+        <name>ranger.plugin.kirka.policy.cache.dir</name>
+        <value>/tmp/ranger-cache/kirka</value>
+    </property>
+
+    <!-- Activer le SSL pour la communication avec Ranger Admin -->
+    <property>
+        <name>ranger.plugin.kirka.policy.rest.ssl.config.file</name>
+        <value></value>
+    </property>
+
+    <!-- Configuration de l'audit -->
+    <property>
+        <name>ranger.plugin.kirka.audit.enabled</name>
+        <value>true</value>
+    </property>
+
+    <!-- Type de destination d'audit: solr, hdfs, log4j -->
+    <property>
+        <name>ranger.plugin.kirka.audit.destination</name>
+        <value>log4j</value>
+    </property>
+
+    <!-- URL Solr pour l'audit (si audit.destination=solr) -->
+    <property>
+        <name>ranger.plugin.kirka.audit.solr.urls</name>
+        <value></value>
+    </property>
+
+    <!-- Répertoire HDFS pour l'audit (si audit.destination=hdfs) -->
+    <property>
+        <name>ranger.plugin.kirka.audit.hdfs.dir</name>
+        <value></value>
+    </property>
+
+    <!-- Activer l'autorisation basée sur les tags -->
+    <property>
+        <name>ranger.plugin.kirka.enable.tag.based.policies</name>
+        <value>true</value>
+    </property>
+
+    <!-- URL du service de tags Ranger -->
+    <property>
+        <name>ranger.plugin.kirka.tag.rest.url</name>
+        <value>http://localhost:6080</value>
+    </property>
+
+    <!-- Intervalle de rafraîchissement des tags (en millisecondes) -->
+    <property>
+        <name>ranger.plugin.kirka.tag.pollIntervalMs</name>
+        <value>30000</value>
+    </property>
+</configuration>

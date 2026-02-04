@@ -1,0 +1,198 @@
+{
+  "name": "kirka",
+  "displayName": "Kirka MLFlow",
+  "implClass": "org.apache.ranger.services.kirka.RangerServiceKirka",
+  "label": "Kirka MLFlow Service",
+  "description": "Apache Ranger plugin for Kirka MLFlow service",
+  "options": {
+    "enableDenyAndExceptionsInPolicies": "true"
+  },
+  "configs": [
+    {
+      "itemId": 1,
+      "name": "kirka.url",
+      "type": "string",
+      "mandatory": true,
+      "defaultValue": "http://localhost:8080",
+      "label": "Kirka Service URL"
+    },
+    {
+      "itemId": 2,
+      "name": "kirka.admin.user",
+      "type": "string",
+      "mandatory": true,
+      "defaultValue": "admin",
+      "label": "Admin Username"
+    },
+    {
+      "itemId": 3,
+      "name": "kirka.admin.password",
+      "type": "password",
+      "mandatory": true,
+      "defaultValue": "",
+      "label": "Admin Password"
+    }
+  ],
+  "resources": [
+    {
+      "itemId": 1,
+      "name": "experiment",
+      "type": "string",
+      "level": 1,
+      "mandatory": true,
+      "lookupSupported": true,
+      "recursiveSupported": false,
+      "excludesSupported": true,
+      "matcher": "org.apache.ranger.plugin.resourcematcher.RangerDefaultResourceMatcher",
+      "matcherOptions": {
+        "wildCard": "true",
+        "ignoreCase": "true"
+      },
+      "label": "Experiment",
+      "description": "MLFlow Experiment"
+    },
+    {
+      "itemId": 2,
+      "name": "run",
+      "type": "string",
+      "level": 2,
+      "parent": "experiment",
+      "mandatory": false,
+      "lookupSupported": true,
+      "recursiveSupported": false,
+      "excludesSupported": true,
+      "matcher": "org.apache.ranger.plugin.resourcematcher.RangerDefaultResourceMatcher",
+      "matcherOptions": {
+        "wildCard": "true",
+        "ignoreCase": "true"
+      },
+      "label": "Run",
+      "description": "MLFlow Run within an Experiment"
+    },
+    {
+      "itemId": 3,
+      "name": "model",
+      "type": "string",
+      "level": 1,
+      "mandatory": true,
+      "lookupSupported": true,
+      "recursiveSupported": false,
+      "excludesSupported": true,
+      "matcher": "org.apache.ranger.plugin.resourcematcher.RangerDefaultResourceMatcher",
+      "matcherOptions": {
+        "wildCard": "true",
+        "ignoreCase": "true"
+      },
+      "label": "Registered Model",
+      "description": "MLFlow Registered Model"
+    },
+    {
+      "itemId": 4,
+      "name": "gateway",
+      "type": "string",
+      "level": 1,
+      "mandatory": true,
+      "lookupSupported": true,
+      "recursiveSupported": false,
+      "excludesSupported": true,
+      "matcher": "org.apache.ranger.plugin.resourcematcher.RangerDefaultResourceMatcher",
+      "matcherOptions": {
+        "wildCard": "true",
+        "ignoreCase": "true"
+      },
+      "label": "Gateway Endpoint",
+      "description": "AI Gateway Endpoint"
+    },
+    {
+      "itemId": 5,
+      "name": "scorer",
+      "type": "string",
+      "level": 1,
+      "mandatory": true,
+      "lookupSupported": true,
+      "recursiveSupported": false,
+      "excludesSupported": true,
+      "matcher": "org.apache.ranger.plugin.resourcematcher.RangerDefaultResourceMatcher",
+      "matcherOptions": {
+        "wildCard": "true",
+        "ignoreCase": "true"
+      },
+      "label": "Scorer",
+      "description": "MLFlow Scorer"
+    },
+    {
+      "itemId": 6,
+      "name": "prompt",
+      "type": "string",
+      "level": 1,
+      "mandatory": true,
+      "lookupSupported": true,
+      "recursiveSupported": false,
+      "excludesSupported": true,
+      "matcher": "org.apache.ranger.plugin.resourcematcher.RangerDefaultResourceMatcher",
+      "matcherOptions": {
+        "wildCard": "true",
+        "ignoreCase": "true"
+      },
+      "label": "Prompt",
+      "description": "Prompt Template"
+    }
+  ],
+  "accessTypes": [
+    {
+      "itemId": 1,
+      "name": "read",
+      "label": "Read",
+      "impliedGrants": []
+    },
+    {
+      "itemId": 2,
+      "name": "write",
+      "label": "Write",
+      "impliedGrants": ["read"]
+    },
+    {
+      "itemId": 3,
+      "name": "delete",
+      "label": "Delete",
+      "impliedGrants": ["read"]
+    },
+    {
+      "itemId": 4,
+      "name": "admin",
+      "label": "Admin",
+      "impliedGrants": ["read", "write", "delete"]
+    }
+  ],
+  "policyConditions": [
+    {
+      "itemId": 1,
+      "name": "tag-based",
+      "evaluator": "org.apache.ranger.plugin.conditionevaluator.RangerTagBasedConditionEvaluator",
+      "evaluatorOptions": {},
+      "label": "Tag Based",
+      "description": "Tag based access control"
+    }
+  ],
+  "contextEnrichers": [
+    {
+      "itemId": 1,
+      "name": "TagEnricher",
+      "enricher": "org.apache.ranger.plugin.contextenricher.RangerTagEnricher",
+      "enricherOptions": {
+        "tagRetrieverClassName": "org.apache.ranger.plugin.contextenricher.RangerFileBasedTagRetriever",
+        "tagRefresherPollingInterval": "60000"
+      }
+    }
+  ],
+  "enums": [],
+  "dataMaskDef": {
+    "maskTypes": [],
+    "accessTypes": [],
+    "resources": []
+  },
+  "rowFilterDef": {
+    "accessTypes": [],
+    "resources": []
+  }
+}

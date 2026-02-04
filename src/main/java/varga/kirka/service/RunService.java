@@ -2,6 +2,7 @@ package varga.kirka.service;
 import lombok.extern.slf4j.Slf4j;
 import varga.kirka.model.*;
 import varga.kirka.repo.RunRepository;
+import varga.kirka.security.SecurityContextHelper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -15,12 +16,19 @@ import java.util.stream.Collectors;
 @Service
 public class RunService {
 
+    private static final String RESOURCE_TYPE = "run";
+
     @Autowired
     private RunRepository runRepository;
+
+    @Autowired
+    private SecurityContextHelper securityContextHelper;
 
     public Run createRun(String experimentId, String userId, long startTime, Map<String, String> tagsMap) throws IOException {
         log.info("Creating run for experimentId: {}, userId: {}", experimentId, userId);
         String runId = UUID.randomUUID().toString();
+        // Use current user as owner if userId is not provided
+        String owner = (userId != null && !userId.isEmpty()) ? userId : securityContextHelper.getCurrentUser();
         List<RunTag> tags = new java.util.ArrayList<>();
         if (tagsMap != null) {
             for (Map.Entry<String, String> entry : tagsMap.entrySet()) {
@@ -32,7 +40,7 @@ public class RunService {
                         .runId(runId)
                         .runUuid(runId)
                         .experimentId(experimentId)
-                        .userId(userId)
+                        .userId(owner)
                         .status(RunStatus.RUNNING)
                         .startTime(startTime)
                         .artifactUri("hdfs:///mlflow/artifacts/" + experimentId + "/" + runId)
@@ -50,25 +58,51 @@ public class RunService {
 
     public Run getRun(String runId) throws IOException {
         log.debug("Fetching run: {}", runId);
-        return runRepository.getRun(runId);
+        Run run = runRepository.getRun(runId);
+        if (run != null) {
+            Map<String, String> tagsMap = getRunTagsMap(run);
+            securityContextHelper.checkReadAccess(RESOURCE_TYPE, runId, run.getInfo().getUserId(), tagsMap);
+        }
+        return run;
     }
 
     public void updateRun(String runId, String status, long endTime) throws IOException {
         log.info("Updating run: {} with status: {} and endTime: {}", runId, status, endTime);
+        Run run = runRepository.getRun(runId);
+        if (run != null) {
+            Map<String, String> tagsMap = getRunTagsMap(run);
+            securityContextHelper.checkWriteAccess(RESOURCE_TYPE, runId, run.getInfo().getUserId(), tagsMap);
+        }
         runRepository.updateRun(runId, status, endTime);
     }
 
     public void deleteRun(String runId) throws IOException {
+        Run run = runRepository.getRun(runId);
+        if (run != null) {
+            Map<String, String> tagsMap = getRunTagsMap(run);
+            securityContextHelper.checkDeleteAccess(RESOURCE_TYPE, runId, run.getInfo().getUserId(), tagsMap);
+        }
         runRepository.deleteRun(runId);
     }
 
     public void restoreRun(String runId) throws IOException {
+        Run run = runRepository.getRun(runId);
+        if (run != null) {
+            Map<String, String> tagsMap = getRunTagsMap(run);
+            securityContextHelper.checkWriteAccess(RESOURCE_TYPE, runId, run.getInfo().getUserId(), tagsMap);
+        }
         runRepository.restoreRun(runId);
     }
 
     public void logBatch(String runId, List<Map<String, Object>> metricsData, 
                          List<Map<String, String>> paramsData, 
                          List<Map<String, String>> tagsData) throws IOException {
+        Run run = runRepository.getRun(runId);
+        if (run != null) {
+            Map<String, String> tagsMap = getRunTagsMap(run);
+            securityContextHelper.checkWriteAccess(RESOURCE_TYPE, runId, run.getInfo().getUserId(), tagsMap);
+        }
+        
         List<Metric> metrics = metricsData != null ? metricsData.stream().map(m -> Metric.builder()
                 .key((String) m.get("key"))
                 .value(((Number) m.get("value")).doubleValue())
@@ -88,15 +122,34 @@ public class RunService {
     }
 
     public void setTag(String runId, String key, String value) throws IOException {
+        Run run = runRepository.getRun(runId);
+        if (run != null) {
+            Map<String, String> tagsMap = getRunTagsMap(run);
+            securityContextHelper.checkWriteAccess(RESOURCE_TYPE, runId, run.getInfo().getUserId(), tagsMap);
+        }
         runRepository.setTag(runId, key, value);
     }
 
     public void deleteTag(String runId, String key) throws IOException {
+        Run run = runRepository.getRun(runId);
+        if (run != null) {
+            Map<String, String> tagsMap = getRunTagsMap(run);
+            securityContextHelper.checkWriteAccess(RESOURCE_TYPE, runId, run.getInfo().getUserId(), tagsMap);
+        }
         runRepository.deleteTag(runId, key);
     }
 
     public List<Run> searchRuns(List<String> experimentIds, String filter, String runViewType) throws IOException {
         List<Run> runs = runRepository.searchRuns(experimentIds, filter, runViewType);
+        
+        // Filter by read access
+        runs = runs.stream()
+                .filter(run -> {
+                    Map<String, String> tagsMap = getRunTagsMap(run);
+                    return securityContextHelper.canRead(RESOURCE_TYPE, run.getInfo().getRunId(), 
+                            run.getInfo().getUserId(), tagsMap);
+                })
+                .collect(Collectors.toList());
         
         if (runViewType != null) {
             runs = runs.stream().filter(r -> {
@@ -111,14 +164,39 @@ public class RunService {
     }
 
     public List<Metric> getMetricHistory(String runId, String metricKey) throws IOException {
+        Run run = runRepository.getRun(runId);
+        if (run != null) {
+            Map<String, String> tagsMap = getRunTagsMap(run);
+            securityContextHelper.checkReadAccess(RESOURCE_TYPE, runId, run.getInfo().getUserId(), tagsMap);
+        }
         return runRepository.getMetricHistory(runId, metricKey);
     }
 
     public void logParameter(String runId, String key, String value) throws IOException {
+        Run run = runRepository.getRun(runId);
+        if (run != null) {
+            Map<String, String> tagsMap = getRunTagsMap(run);
+            securityContextHelper.checkWriteAccess(RESOURCE_TYPE, runId, run.getInfo().getUserId(), tagsMap);
+        }
         runRepository.logBatch(runId, null, List.of(new Param(key, value)), null);
     }
 
     public void logMetric(String runId, String key, double value, long timestamp, long step) throws IOException {
+        Run run = runRepository.getRun(runId);
+        if (run != null) {
+            Map<String, String> tagsMap = getRunTagsMap(run);
+            securityContextHelper.checkWriteAccess(RESOURCE_TYPE, runId, run.getInfo().getUserId(), tagsMap);
+        }
         runRepository.logBatch(runId, List.of(new Metric(key, value, timestamp, step)), null, null);
+    }
+
+    /**
+     * Extracts tags from a Run as a Map for authorization checks.
+     */
+    private Map<String, String> getRunTagsMap(Run run) {
+        if (run.getData() == null || run.getData().getTags() == null) {
+            return Map.of();
+        }
+        return securityContextHelper.tagsToMap(run.getData().getTags(), RunTag::getKey, RunTag::getValue);
     }
 }
