@@ -1,7 +1,7 @@
 package varga.kirka.service;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import varga.kirka.model.AuthConfigEntry;
 import varga.kirka.model.GatewaySecretInfo;
@@ -16,22 +16,23 @@ import java.util.stream.Collectors;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class GatewaySecretService {
 
     private static final String RESOURCE_TYPE = "secret";
 
-    @Autowired
-    private GatewaySecretRepository gatewaySecretRepository;
+    private final GatewaySecretRepository gatewaySecretRepository;
 
-    @Autowired
-    private SecurityContextHelper securityContextHelper;
+    private final SecurityContextHelper securityContextHelper;
 
     public GatewaySecretInfo createSecret(String name, List<SecretValueEntry> value, String provider, List<AuthConfigEntry> authConfig, String createdBy) {
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("Secret name must not be empty");
+        }
         String id = UUID.randomUUID().toString();
-        // Use current user as owner
         String currentUser = securityContextHelper.getCurrentUser();
         String owner = currentUser != null ? currentUser : createdBy;
-        
+
         List<MaskedValuesEntry> maskedValues = new ArrayList<>();
         if (value != null) {
             for (SecretValueEntry entry : value) {
@@ -73,10 +74,9 @@ public class GatewaySecretService {
         }
 
         if (existing == null) {
-            throw new RuntimeException("Secret not found: " + id);
+            throw new ResourceNotFoundException("GatewaySecret", id);
         }
 
-        // Check write access
         securityContextHelper.checkWriteAccess(RESOURCE_TYPE, id, existing.getCreatedBy(), Map.of());
 
         existing.setLastUpdatedAt(System.currentTimeMillis());
@@ -118,9 +118,10 @@ public class GatewaySecretService {
     public void deleteSecret(String id) {
         try {
             GatewaySecretInfo secret = gatewaySecretRepository.getSecretById(id);
-            if (secret != null) {
-                securityContextHelper.checkDeleteAccess(RESOURCE_TYPE, id, secret.getCreatedBy(), Map.of());
+            if (secret == null) {
+                throw new ResourceNotFoundException("GatewaySecret", id);
             }
+            securityContextHelper.checkDeleteAccess(RESOURCE_TYPE, id, secret.getCreatedBy(), Map.of());
             gatewaySecretRepository.deleteSecret(id);
         } catch (IOException e) {
             log.error("Failed to delete secret from HBase", e);
@@ -136,9 +137,10 @@ public class GatewaySecretService {
             } else if (name != null) {
                 secret = gatewaySecretRepository.getSecretByName(name);
             }
-            if (secret != null) {
-                securityContextHelper.checkReadAccess(RESOURCE_TYPE, secret.getSecretId(), secret.getCreatedBy(), Map.of());
+            if (secret == null) {
+                throw new ResourceNotFoundException("GatewaySecret", id != null ? id : name);
             }
+            securityContextHelper.checkReadAccess(RESOURCE_TYPE, secret.getSecretId(), secret.getCreatedBy(), Map.of());
             return secret;
         } catch (IOException e) {
             log.error("Failed to get secret from HBase", e);
@@ -149,9 +151,8 @@ public class GatewaySecretService {
     public List<GatewaySecretInfo> listSecrets(String provider) {
         try {
             List<GatewaySecretInfo> secrets = gatewaySecretRepository.listSecrets(provider);
-            // Filter secrets based on read access
             return secrets.stream()
-                    .filter(secret -> securityContextHelper.canRead(RESOURCE_TYPE, secret.getSecretId(), 
+                    .filter(secret -> securityContextHelper.canRead(RESOURCE_TYPE, secret.getSecretId(),
                             secret.getCreatedBy(), Map.of()))
                     .collect(Collectors.toList());
         } catch (IOException e) {

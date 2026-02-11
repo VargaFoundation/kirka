@@ -1,10 +1,10 @@
 package varga.kirka.repo;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.*;
 import org.apache.hadoop.hbase.util.Bytes;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 import varga.kirka.model.Prompt;
 
@@ -16,24 +16,25 @@ import java.util.Map;
 
 @Slf4j
 @Repository
+@RequiredArgsConstructor
 public class PromptRepository {
 
     private static final String TABLE_NAME = "mlflow_prompts";
     private static final byte[] CF_INFO = Bytes.toBytes("info");
     private static final byte[] CF_TAGS = Bytes.toBytes("tags");
-    
+
     private static final byte[] COL_NAME = Bytes.toBytes("name");
     private static final byte[] COL_VERSION = Bytes.toBytes("version");
     private static final byte[] COL_TEMPLATE = Bytes.toBytes("template");
     private static final byte[] COL_DESCRIPTION = Bytes.toBytes("description");
+    private static final byte[] COL_OWNER = Bytes.toBytes("owner");
     private static final byte[] COL_CREATION_TIME = Bytes.toBytes("creation_time");
     private static final byte[] COL_LAST_UPDATE_TIME = Bytes.toBytes("last_update_time");
-    private static final byte[] COL_OWNER = Bytes.toBytes("owner");
 
-    @Autowired
-    private Connection connection;
+    private final Connection connection;
 
     public void createPrompt(Prompt prompt) throws IOException {
+        log.info("HBase: creating prompt {} ({})", prompt.getName(), prompt.getId());
         try (Table table = connection.getTable(TableName.valueOf(TABLE_NAME))) {
             if (prompt.getId() == null || prompt.getId().isBlank()) {
                 throw new IllegalArgumentException("Prompt id must be provided");

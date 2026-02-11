@@ -1,7 +1,7 @@
 package varga.kirka.security;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
@@ -13,10 +13,10 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class SecurityContextHelper {
 
-    @Autowired
-    private AuthorizationService authorizationService;
+    private final AuthorizationService authorizationService;
 
     /**
      * Gets the current user.
@@ -30,7 +30,7 @@ public class SecurityContextHelper {
      * Checks if the current user has read access to a resource.
      */
     public boolean canRead(String resourceType, String resourceId, String owner, Map<String, String> tags) {
-        return authorizationService.isAccessAllowed(resourceType, resourceId, owner, tags, 
+        return authorizationService.isAccessAllowed(resourceType, resourceId, owner, tags,
                 AuthorizationService.AccessType.READ);
     }
 
@@ -38,7 +38,7 @@ public class SecurityContextHelper {
      * Checks if the current user has write access to a resource.
      */
     public boolean canWrite(String resourceType, String resourceId, String owner, Map<String, String> tags) {
-        return authorizationService.isAccessAllowed(resourceType, resourceId, owner, tags, 
+        return authorizationService.isAccessAllowed(resourceType, resourceId, owner, tags,
                 AuthorizationService.AccessType.WRITE);
     }
 
@@ -46,7 +46,7 @@ public class SecurityContextHelper {
      * Checks if the current user can delete a resource.
      */
     public boolean canDelete(String resourceType, String resourceId, String owner, Map<String, String> tags) {
-        return authorizationService.isAccessAllowed(resourceType, resourceId, owner, tags, 
+        return authorizationService.isAccessAllowed(resourceType, resourceId, owner, tags,
                 AuthorizationService.AccessType.DELETE);
     }
 
@@ -54,7 +54,7 @@ public class SecurityContextHelper {
      * Checks if the current user has admin rights on a resource.
      */
     public boolean canAdmin(String resourceType, String resourceId, String owner, Map<String, String> tags) {
-        return authorizationService.isAccessAllowed(resourceType, resourceId, owner, tags, 
+        return authorizationService.isAccessAllowed(resourceType, resourceId, owner, tags,
                 AuthorizationService.AccessType.ADMIN);
     }
 
@@ -88,7 +88,7 @@ public class SecurityContextHelper {
     /**
      * Converts a list of tags (ExperimentTag, etc.) to a Map for authorization.
      */
-    public <T> Map<String, String> tagsToMap(java.util.List<T> tags, 
+    public <T> Map<String, String> tagsToMap(java.util.List<T> tags,
                                               java.util.function.Function<T, String> keyExtractor,
                                               java.util.function.Function<T, String> valueExtractor) {
         if (tags == null) {

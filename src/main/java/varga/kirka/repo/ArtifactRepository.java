@@ -1,8 +1,8 @@
 package varga.kirka.repo;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.*;
 import org.apache.hadoop.io.IOUtils;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 
 import varga.kirka.model.FileInfo;
@@ -14,10 +14,10 @@ import java.util.List;
 
 @Slf4j
 @Repository
+@RequiredArgsConstructor
 public class ArtifactRepository {
 
-    @Autowired
-    private FileSystem fileSystem;
+    private final FileSystem fileSystem;
 
     public void uploadArtifact(String hdfsPath, InputStream inputStream) throws IOException {
         Path path = new Path(hdfsPath);

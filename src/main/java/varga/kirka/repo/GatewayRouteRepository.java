@@ -3,11 +3,11 @@ package varga.kirka.repo;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.*;
 import org.apache.hadoop.hbase.util.Bytes;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 import varga.kirka.model.GatewayRoute;
 
@@ -18,6 +18,7 @@ import java.util.Map;
 
 @Slf4j
 @Repository
+@RequiredArgsConstructor
 public class GatewayRouteRepository {
 
     private static final String TABLE_NAME = "mlflow_gateway_routes";
@@ -29,10 +30,9 @@ public class GatewayRouteRepository {
     private static final byte[] COL_MODEL_PROVIDER = Bytes.toBytes("model_provider");
     private static final byte[] COL_CONFIG = Bytes.toBytes("config");
 
-    @Autowired
-    private Connection connection;
+    private final Connection connection;
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private static final ObjectMapper objectMapper = new ObjectMapper();
 
     public void saveRoute(GatewayRoute route) throws IOException {
         try (Table table = connection.getTable(TableName.valueOf(TABLE_NAME))) {

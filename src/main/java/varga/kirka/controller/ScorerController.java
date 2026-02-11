@@ -1,7 +1,7 @@
 package varga.kirka.controller;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import varga.kirka.model.Scorer;
 import varga.kirka.service.ScorerService;
@@ -13,10 +13,10 @@ import java.util.Map;
 @Slf4j
 @RestController
 @RequestMapping("/api/2.0/mlflow/scorers")
+@RequiredArgsConstructor
 public class ScorerController {
 
-    @Autowired
-    private ScorerService scorerService;
+    private final ScorerService scorerService;
 
     @lombok.Data
     @lombok.AllArgsConstructor
@@ -54,12 +54,13 @@ public class ScorerController {
     }
 
     @PostMapping("/register")
-    public Scorer registerScorer(@RequestBody RegisterScorerRequest request) throws IOException {
+    public ScorerResponse registerScorer(@RequestBody RegisterScorerRequest request) throws IOException {
         String experimentId = request.getExperiment_id();
         String name = request.getName();
         String serializedScorer = request.getSerialized_scorer();
         log.info("REST request to register scorer: {} for experiment: {}", name, experimentId);
-        return scorerService.registerScorer(experimentId, name, serializedScorer);
+        Scorer scorer = scorerService.registerScorer(experimentId, name, serializedScorer);
+        return new ScorerResponse(scorer);
     }
 
     @GetMapping("/get")

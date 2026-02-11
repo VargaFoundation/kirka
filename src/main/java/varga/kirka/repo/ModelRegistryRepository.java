@@ -1,10 +1,10 @@
 package varga.kirka.repo;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import varga.kirka.model.*;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.*;
 import org.apache.hadoop.hbase.util.Bytes;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 
 import java.io.IOException;
@@ -13,6 +13,7 @@ import java.util.List;
 
 @Slf4j
 @Repository
+@RequiredArgsConstructor
 public class ModelRegistryRepository {
 
     private static final String MODELS_TABLE = "mlflow_registered_models";
@@ -20,8 +21,7 @@ public class ModelRegistryRepository {
     
     private static final byte[] CF_INFO = Bytes.toBytes("info");
     
-    @Autowired
-    private Connection connection;
+    private final Connection connection;
 
     public void createRegisteredModel(String name) throws IOException {
         log.info("HBase: creating registered model {}", name);

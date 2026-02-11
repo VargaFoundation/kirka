@@ -1,8 +1,8 @@
 package varga.kirka.controller;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import varga.kirka.model.*;
 import varga.kirka.service.ModelRegistryService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
@@ -12,10 +12,10 @@ import java.util.List;
 @Slf4j
 @RestController
 @RequestMapping("/api/2.0/mlflow")
+@RequiredArgsConstructor
 public class ModelRegistryController {
 
-    @Autowired
-    private ModelRegistryService modelRegistryService;
+    private final ModelRegistryService modelRegistryService;
 
     @lombok.Data
     public static class CreateRegisteredModelRequest {

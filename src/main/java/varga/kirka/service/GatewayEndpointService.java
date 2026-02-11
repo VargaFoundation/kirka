@@ -1,7 +1,7 @@
 package varga.kirka.service;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import varga.kirka.model.*;
 import varga.kirka.repo.GatewayEndpointRepository;
@@ -16,21 +16,22 @@ import java.util.stream.Collectors;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class GatewayEndpointService {
 
     private static final String RESOURCE_TYPE = "gateway";
 
-    @Autowired
-    private GatewayEndpointRepository gatewayEndpointRepository;
+    private final GatewayEndpointRepository gatewayEndpointRepository;
 
-    @Autowired
-    private SecurityContextHelper securityContextHelper;
+    private final SecurityContextHelper securityContextHelper;
 
     public GatewayEndpointModelMapping attachModel(String endpointId, GatewayEndpointModelConfig config, String createdBy) {
         try {
+            if (endpointId == null || endpointId.isBlank()) {
+                throw new IllegalArgumentException("endpoint_id must not be empty");
+            }
             GatewayEndpoint endpoint = gatewayEndpointRepository.getEndpointById(endpointId);
             if (endpoint == null) {
-                // Creating new endpoint - use current user as owner
                 String currentUser = securityContextHelper.getCurrentUser();
                 endpoint = GatewayEndpoint.builder()
                         .endpointId(endpointId)
@@ -42,7 +43,6 @@ public class GatewayEndpointService {
                         .tags(new ArrayList<>())
                         .build();
             } else {
-                // Check write access on existing endpoint
                 Map<String, String> tagsMap = getEndpointTagsMap(endpoint);
                 securityContextHelper.checkWriteAccess(RESOURCE_TYPE, endpointId, endpoint.getCreatedBy(), tagsMap);
             }
@@ -79,10 +79,9 @@ public class GatewayEndpointService {
         try {
             GatewayEndpoint endpoint = gatewayEndpointRepository.getEndpointById(endpointId);
             if (endpoint == null) {
-                throw new RuntimeException("Endpoint not found: " + endpointId);
+                throw new ResourceNotFoundException("GatewayEndpoint", endpointId);
             }
 
-            // Check write access
             Map<String, String> tagsMap = getEndpointTagsMap(endpoint);
             securityContextHelper.checkWriteAccess(RESOURCE_TYPE, endpointId, endpoint.getCreatedBy(), tagsMap);
 
@@ -101,9 +100,11 @@ public class GatewayEndpointService {
 
     public void setTag(String endpointId, GatewayEndpointTag tag) {
         try {
+            if (endpointId == null || endpointId.isBlank()) {
+                throw new IllegalArgumentException("endpoint_id must not be empty");
+            }
             GatewayEndpoint endpoint = gatewayEndpointRepository.getEndpointById(endpointId);
             if (endpoint == null) {
-                // Creating new endpoint - use current user as owner
                 String currentUser = securityContextHelper.getCurrentUser();
                 endpoint = GatewayEndpoint.builder()
                         .endpointId(endpointId)
@@ -114,7 +115,6 @@ public class GatewayEndpointService {
                         .tags(new ArrayList<>())
                         .build();
             } else {
-                // Check write access on existing endpoint
                 Map<String, String> tagsMap = getEndpointTagsMap(endpoint);
                 securityContextHelper.checkWriteAccess(RESOURCE_TYPE, endpointId, endpoint.getCreatedBy(), tagsMap);
             }
@@ -140,10 +140,9 @@ public class GatewayEndpointService {
         try {
             GatewayEndpoint endpoint = gatewayEndpointRepository.getEndpointById(endpointId);
             if (endpoint == null) {
-                return;
+                throw new ResourceNotFoundException("GatewayEndpoint", endpointId);
             }
 
-            // Check write access
             Map<String, String> tagsMap = getEndpointTagsMap(endpoint);
             securityContextHelper.checkWriteAccess(RESOURCE_TYPE, endpointId, endpoint.getCreatedBy(), tagsMap);
 
@@ -163,10 +162,11 @@ public class GatewayEndpointService {
     public GatewayEndpoint getEndpoint(String endpointId) {
         try {
             GatewayEndpoint endpoint = gatewayEndpointRepository.getEndpointById(endpointId);
-            if (endpoint != null) {
-                Map<String, String> tagsMap = getEndpointTagsMap(endpoint);
-                securityContextHelper.checkReadAccess(RESOURCE_TYPE, endpointId, endpoint.getCreatedBy(), tagsMap);
+            if (endpoint == null) {
+                throw new ResourceNotFoundException("GatewayEndpoint", endpointId);
             }
+            Map<String, String> tagsMap = getEndpointTagsMap(endpoint);
+            securityContextHelper.checkReadAccess(RESOURCE_TYPE, endpointId, endpoint.getCreatedBy(), tagsMap);
             return endpoint;
         } catch (IOException e) {
             log.error("Failed to get endpoint from HBase", e);
@@ -177,11 +177,10 @@ public class GatewayEndpointService {
     public List<GatewayEndpoint> listEndpoints() {
         try {
             List<GatewayEndpoint> endpoints = gatewayEndpointRepository.listEndpoints();
-            // Filter endpoints based on read access
             return endpoints.stream()
                     .filter(endpoint -> {
                         Map<String, String> tagsMap = getEndpointTagsMap(endpoint);
-                        return securityContextHelper.canRead(RESOURCE_TYPE, endpoint.getEndpointId(), 
+                        return securityContextHelper.canRead(RESOURCE_TYPE, endpoint.getEndpointId(),
                                 endpoint.getCreatedBy(), tagsMap);
                     })
                     .collect(Collectors.toList());
@@ -191,9 +190,6 @@ public class GatewayEndpointService {
         }
     }
 
-    /**
-     * Extracts tags from a GatewayEndpoint as a Map for authorization checks.
-     */
     private Map<String, String> getEndpointTagsMap(GatewayEndpoint endpoint) {
         if (endpoint.getTags() == null) {
             return Map.of();

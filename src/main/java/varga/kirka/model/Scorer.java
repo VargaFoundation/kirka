@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class Scorer {
-    private int experimentId;
+    private String experimentId;
     private String scorerName;
     private int scorerVersion;
     private String serializedScorer;

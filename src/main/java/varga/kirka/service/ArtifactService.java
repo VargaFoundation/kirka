@@ -1,9 +1,9 @@
 package varga.kirka.service;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import varga.kirka.model.FileInfo;
 import varga.kirka.repo.ArtifactRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -11,10 +11,10 @@ import java.util.List;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class ArtifactService {
 
-    @Autowired
-    private ArtifactRepository artifactRepository;
+    private final ArtifactRepository artifactRepository;
 
     public List<FileInfo> listArtifacts(String path) throws IOException {
         // log.debug("Listing artifacts at: {}", path);

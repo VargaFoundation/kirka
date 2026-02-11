@@ -1,9 +1,9 @@
 package varga.kirka.service;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import varga.kirka.model.*;
 import varga.kirka.repo.RunRepository;
 import varga.kirka.security.SecurityContextHelper;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -14,18 +14,20 @@ import java.util.stream.Collectors;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class RunService {
 
     private static final String RESOURCE_TYPE = "run";
 
-    @Autowired
-    private RunRepository runRepository;
+    private final RunRepository runRepository;
 
-    @Autowired
-    private SecurityContextHelper securityContextHelper;
+    private final SecurityContextHelper securityContextHelper;
 
     public Run createRun(String experimentId, String userId, long startTime, Map<String, String> tagsMap) throws IOException {
         log.info("Creating run for experimentId: {}, userId: {}", experimentId, userId);
+        if (experimentId == null || experimentId.isBlank()) {
+            throw new IllegalArgumentException("experiment_id must not be empty");
+        }
         String runId = UUID.randomUUID().toString();
         // Use current user as owner if userId is not provided
         String owner = (userId != null && !userId.isEmpty()) ? userId : securityContextHelper.getCurrentUser();
@@ -59,61 +61,66 @@ public class RunService {
     public Run getRun(String runId) throws IOException {
         log.debug("Fetching run: {}", runId);
         Run run = runRepository.getRun(runId);
-        if (run != null) {
-            Map<String, String> tagsMap = getRunTagsMap(run);
-            securityContextHelper.checkReadAccess(RESOURCE_TYPE, runId, run.getInfo().getUserId(), tagsMap);
+        if (run == null) {
+            throw new ResourceNotFoundException("Run", runId);
         }
+        Map<String, String> tagsMap = getRunTagsMap(run);
+        securityContextHelper.checkReadAccess(RESOURCE_TYPE, runId, run.getInfo().getUserId(), tagsMap);
         return run;
     }
 
     public void updateRun(String runId, String status, long endTime) throws IOException {
         log.info("Updating run: {} with status: {} and endTime: {}", runId, status, endTime);
         Run run = runRepository.getRun(runId);
-        if (run != null) {
-            Map<String, String> tagsMap = getRunTagsMap(run);
-            securityContextHelper.checkWriteAccess(RESOURCE_TYPE, runId, run.getInfo().getUserId(), tagsMap);
+        if (run == null) {
+            throw new ResourceNotFoundException("Run", runId);
         }
+        Map<String, String> tagsMap = getRunTagsMap(run);
+        securityContextHelper.checkWriteAccess(RESOURCE_TYPE, runId, run.getInfo().getUserId(), tagsMap);
         runRepository.updateRun(runId, status, endTime);
     }
 
     public void deleteRun(String runId) throws IOException {
         Run run = runRepository.getRun(runId);
-        if (run != null) {
-            Map<String, String> tagsMap = getRunTagsMap(run);
-            securityContextHelper.checkDeleteAccess(RESOURCE_TYPE, runId, run.getInfo().getUserId(), tagsMap);
+        if (run == null) {
+            throw new ResourceNotFoundException("Run", runId);
         }
+        Map<String, String> tagsMap = getRunTagsMap(run);
+        securityContextHelper.checkDeleteAccess(RESOURCE_TYPE, runId, run.getInfo().getUserId(), tagsMap);
         runRepository.deleteRun(runId);
     }
 
     public void restoreRun(String runId) throws IOException {
         Run run = runRepository.getRun(runId);
-        if (run != null) {
-            Map<String, String> tagsMap = getRunTagsMap(run);
-            securityContextHelper.checkWriteAccess(RESOURCE_TYPE, runId, run.getInfo().getUserId(), tagsMap);
+        if (run == null) {
+            throw new ResourceNotFoundException("Run", runId);
         }
+        Map<String, String> tagsMap = getRunTagsMap(run);
+        securityContextHelper.checkWriteAccess(RESOURCE_TYPE, runId, run.getInfo().getUserId(), tagsMap);
         runRepository.restoreRun(runId);
     }
 
-    public void logBatch(String runId, List<Map<String, Object>> metricsData, 
-                         List<Map<String, String>> paramsData, 
+    public void logBatch(String runId, List<Map<String, Object>> metricsData,
+                         List<Map<String, String>> paramsData,
                          List<Map<String, String>> tagsData) throws IOException {
         Run run = runRepository.getRun(runId);
-        if (run != null) {
-            Map<String, String> tagsMap = getRunTagsMap(run);
-            securityContextHelper.checkWriteAccess(RESOURCE_TYPE, runId, run.getInfo().getUserId(), tagsMap);
+        if (run == null) {
+            throw new ResourceNotFoundException("Run", runId);
         }
-        
+        Map<String, String> tagsMap = getRunTagsMap(run);
+        securityContextHelper.checkWriteAccess(RESOURCE_TYPE, runId, run.getInfo().getUserId(), tagsMap);
+
         List<Metric> metrics = metricsData != null ? metricsData.stream().map(m -> Metric.builder()
                 .key((String) m.get("key"))
                 .value(((Number) m.get("value")).doubleValue())
                 .timestamp(m.containsKey("timestamp") ? ((Number) m.get("timestamp")).longValue() : System.currentTimeMillis())
                 .step(m.containsKey("step") ? ((Number) m.get("step")).longValue() : 0L)
                 .build()).collect(Collectors.toList()) : null;
-        
+
         List<Param> params = paramsData != null ? paramsData.stream()
                 .map(p -> Param.builder().key(p.get("key")).value(p.get("value")).build())
                 .collect(Collectors.toList()) : null;
-                
+
         List<RunTag> tags = tagsData != null ? tagsData.stream()
                 .map(t -> RunTag.builder().key(t.get("key")).value(t.get("value")).build())
                 .collect(Collectors.toList()) : null;
@@ -123,38 +130,42 @@ public class RunService {
 
     public void setTag(String runId, String key, String value) throws IOException {
         Run run = runRepository.getRun(runId);
-        if (run != null) {
-            Map<String, String> tagsMap = getRunTagsMap(run);
-            securityContextHelper.checkWriteAccess(RESOURCE_TYPE, runId, run.getInfo().getUserId(), tagsMap);
+        if (run == null) {
+            throw new ResourceNotFoundException("Run", runId);
         }
+        Map<String, String> tagsMap = getRunTagsMap(run);
+        securityContextHelper.checkWriteAccess(RESOURCE_TYPE, runId, run.getInfo().getUserId(), tagsMap);
         runRepository.setTag(runId, key, value);
     }
 
     public void deleteTag(String runId, String key) throws IOException {
         Run run = runRepository.getRun(runId);
-        if (run != null) {
-            Map<String, String> tagsMap = getRunTagsMap(run);
-            securityContextHelper.checkWriteAccess(RESOURCE_TYPE, runId, run.getInfo().getUserId(), tagsMap);
+        if (run == null) {
+            throw new ResourceNotFoundException("Run", runId);
         }
+        Map<String, String> tagsMap = getRunTagsMap(run);
+        securityContextHelper.checkWriteAccess(RESOURCE_TYPE, runId, run.getInfo().getUserId(), tagsMap);
         runRepository.deleteTag(runId, key);
     }
 
     public List<Run> searchRuns(List<String> experimentIds, String filter, String runViewType) throws IOException {
         List<Run> runs = runRepository.searchRuns(experimentIds, filter, runViewType);
-        
+
         // Filter by read access
         runs = runs.stream()
                 .filter(run -> {
                     Map<String, String> tagsMap = getRunTagsMap(run);
-                    return securityContextHelper.canRead(RESOURCE_TYPE, run.getInfo().getRunId(), 
+                    return securityContextHelper.canRead(RESOURCE_TYPE, run.getInfo().getRunId(),
                             run.getInfo().getUserId(), tagsMap);
                 })
                 .collect(Collectors.toList());
-        
+
         if (runViewType != null) {
             runs = runs.stream().filter(r -> {
                 if ("ACTIVE_ONLY".equalsIgnoreCase(runViewType)) {
-                    return !"KILLED".equalsIgnoreCase(r.getInfo().getStatus().name());
+                    return "active".equalsIgnoreCase(r.getInfo().getLifecycleStage());
+                } else if ("DELETED_ONLY".equalsIgnoreCase(runViewType)) {
+                    return "deleted".equalsIgnoreCase(r.getInfo().getLifecycleStage());
                 }
                 return true;
             }).collect(Collectors.toList());
@@ -165,28 +176,31 @@ public class RunService {
 
     public List<Metric> getMetricHistory(String runId, String metricKey) throws IOException {
         Run run = runRepository.getRun(runId);
-        if (run != null) {
-            Map<String, String> tagsMap = getRunTagsMap(run);
-            securityContextHelper.checkReadAccess(RESOURCE_TYPE, runId, run.getInfo().getUserId(), tagsMap);
+        if (run == null) {
+            throw new ResourceNotFoundException("Run", runId);
         }
+        Map<String, String> tagsMap = getRunTagsMap(run);
+        securityContextHelper.checkReadAccess(RESOURCE_TYPE, runId, run.getInfo().getUserId(), tagsMap);
         return runRepository.getMetricHistory(runId, metricKey);
     }
 
     public void logParameter(String runId, String key, String value) throws IOException {
         Run run = runRepository.getRun(runId);
-        if (run != null) {
-            Map<String, String> tagsMap = getRunTagsMap(run);
-            securityContextHelper.checkWriteAccess(RESOURCE_TYPE, runId, run.getInfo().getUserId(), tagsMap);
+        if (run == null) {
+            throw new ResourceNotFoundException("Run", runId);
         }
+        Map<String, String> tagsMap = getRunTagsMap(run);
+        securityContextHelper.checkWriteAccess(RESOURCE_TYPE, runId, run.getInfo().getUserId(), tagsMap);
         runRepository.logBatch(runId, null, List.of(new Param(key, value)), null);
     }
 
     public void logMetric(String runId, String key, double value, long timestamp, long step) throws IOException {
         Run run = runRepository.getRun(runId);
-        if (run != null) {
-            Map<String, String> tagsMap = getRunTagsMap(run);
-            securityContextHelper.checkWriteAccess(RESOURCE_TYPE, runId, run.getInfo().getUserId(), tagsMap);
+        if (run == null) {
+            throw new ResourceNotFoundException("Run", runId);
         }
+        Map<String, String> tagsMap = getRunTagsMap(run);
+        securityContextHelper.checkWriteAccess(RESOURCE_TYPE, runId, run.getInfo().getUserId(), tagsMap);
         runRepository.logBatch(runId, List.of(new Metric(key, value, timestamp, step)), null, null);
     }
 

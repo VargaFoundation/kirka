@@ -3,11 +3,11 @@ package varga.kirka.repo;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.*;
 import org.apache.hadoop.hbase.util.Bytes;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 import varga.kirka.model.AuthConfigEntry;
 import varga.kirka.model.GatewaySecretInfo;
@@ -20,6 +20,7 @@ import java.util.List;
 
 @Slf4j
 @Repository
+@RequiredArgsConstructor
 public class GatewaySecretRepository {
 
     private static final String TABLE_NAME = "mlflow_gateway_secrets";
@@ -36,10 +37,9 @@ public class GatewaySecretRepository {
     private static final byte[] COL_AUTH_CONFIG = Bytes.toBytes("auth_config");
     private static final byte[] COL_SECRET_VALUES = Bytes.toBytes("secret_values");
 
-    @Autowired
-    private Connection connection;
+    private final Connection connection;
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private static final ObjectMapper objectMapper = new ObjectMapper();
 
     public void saveSecret(GatewaySecretInfo secretInfo, List<SecretValueEntry> secretValues) throws IOException {
         try (Table table = connection.getTable(TableName.valueOf(TABLE_NAME))) {

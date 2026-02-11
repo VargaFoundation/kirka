@@ -1,10 +1,10 @@
 package varga.kirka.repo;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.*;
 import org.apache.hadoop.hbase.util.Bytes;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 import varga.kirka.model.Scorer;
 
@@ -15,6 +15,7 @@ import java.util.UUID;
 
 @Slf4j
 @Repository
+@RequiredArgsConstructor
 public class ScorerRepository {
 
     private static final String TABLE_NAME = "mlflow_scorers";
@@ -25,8 +26,7 @@ public class ScorerRepository {
     private static final byte[] COL_SERIALIZED_SCORER = Bytes.toBytes("serialized_scorer");
     private static final byte[] COL_CREATION_TIME = Bytes.toBytes("creation_time");
 
-    @Autowired
-    private Connection connection;
+    private final Connection connection;
 
     public Scorer registerScorer(String experimentId, String name, String serializedScorer) throws IOException {
         int version = getNextVersion(experimentId, name);
@@ -35,7 +35,7 @@ public class ScorerRepository {
 
         Scorer scorer = Scorer.builder()
                 .scorerId(scorerId)
-                .experimentId(Integer.parseInt(experimentId))
+                .experimentId(experimentId)
                 .scorerName(name)
                 .scorerVersion(version)
                 .serializedScorer(serializedScorer)
@@ -139,10 +139,9 @@ public class ScorerRepository {
     }
 
     private Scorer mapResultToScorer(Result result) {
-        String experimentIdStr = Bytes.toString(result.getValue(CF_INFO, COL_EXPERIMENT_ID));
         return Scorer.builder()
                 .scorerId(Bytes.toString(result.getValue(CF_INFO, Bytes.toBytes("scorer_id"))))
-                .experimentId(Integer.parseInt(experimentIdStr))
+                .experimentId(Bytes.toString(result.getValue(CF_INFO, COL_EXPERIMENT_ID)))
                 .scorerName(Bytes.toString(result.getValue(CF_INFO, COL_NAME)))
                 .scorerVersion(Bytes.toInt(result.getValue(CF_INFO, COL_VERSION)))
                 .serializedScorer(Bytes.toString(result.getValue(CF_INFO, COL_SERIALIZED_SCORER)))

@@ -142,4 +142,77 @@ public class ExperimentRepositoryIntegrationTest extends AbstractHBaseIntegratio
         assertNotNull(list);
         assertTrue(list.stream().anyMatch(e -> e.getExperimentId().equals(experimentId)));
     }
+
+    @Test
+    public void testCreateExperimentWithDuplicateNameThrowsException() throws IOException {
+        String name = "Duplicate Name Test";
+        Experiment experiment1 = Experiment.builder()
+                .experimentId("exp-dup-1")
+                .name(name)
+                .artifactLocation("hdfs:///tmp/dup1")
+                .lifecycleStage("active")
+                .creationTime(System.currentTimeMillis())
+                .lastUpdateTime(System.currentTimeMillis())
+                .build();
+        experimentRepository.createExperiment(experiment1);
+
+        Experiment experiment2 = Experiment.builder()
+                .experimentId("exp-dup-2")
+                .name(name)
+                .artifactLocation("hdfs:///tmp/dup2")
+                .lifecycleStage("active")
+                .creationTime(System.currentTimeMillis())
+                .lastUpdateTime(System.currentTimeMillis())
+                .build();
+
+        assertThrows(ExperimentAlreadyExistsException.class, () -> {
+            experimentRepository.createExperiment(experiment2);
+        });
+    }
+
+    @Test
+    public void testUpdateExperimentWithDuplicateNameThrowsException() throws IOException {
+        Experiment experiment1 = Experiment.builder()
+                .experimentId("exp-upd-dup-1")
+                .name("Update Dup Name 1")
+                .artifactLocation("hdfs:///tmp/upd1")
+                .lifecycleStage("active")
+                .creationTime(System.currentTimeMillis())
+                .lastUpdateTime(System.currentTimeMillis())
+                .build();
+        experimentRepository.createExperiment(experiment1);
+
+        Experiment experiment2 = Experiment.builder()
+                .experimentId("exp-upd-dup-2")
+                .name("Update Dup Name 2")
+                .artifactLocation("hdfs:///tmp/upd2")
+                .lifecycleStage("active")
+                .creationTime(System.currentTimeMillis())
+                .lastUpdateTime(System.currentTimeMillis())
+                .build();
+        experimentRepository.createExperiment(experiment2);
+
+        // Try to rename experiment2 to experiment1's name
+        assertThrows(ExperimentAlreadyExistsException.class, () -> {
+            experimentRepository.updateExperiment("exp-upd-dup-2", "Update Dup Name 1");
+        });
+    }
+
+    @Test
+    public void testGetExperimentIdByName() throws IOException {
+        String name = "Index Test Name";
+        String experimentId = "exp-index-test";
+        Experiment experiment = Experiment.builder()
+                .experimentId(experimentId)
+                .name(name)
+                .artifactLocation("hdfs:///tmp/index")
+                .lifecycleStage("active")
+                .creationTime(System.currentTimeMillis())
+                .lastUpdateTime(System.currentTimeMillis())
+                .build();
+        experimentRepository.createExperiment(experiment);
+
+        String retrievedId = experimentRepository.getExperimentIdByName(name);
+        assertEquals(experimentId, retrievedId);
+    }
 }

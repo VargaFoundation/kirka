@@ -30,20 +30,20 @@ public class ScorerControllerTest {
     public void testRegisterScorer() throws Exception {
         Scorer scorer = Scorer.builder()
                 .scorerId("s1")
-                .experimentId(1)
+                .experimentId("1")
                 .scorerName("scorer1")
                 .scorerVersion(1)
                 .serializedScorer("{}")
                 .build();
-        
+
         when(scorerService.registerScorer(anyString(), anyString(), anyString())).thenReturn(scorer);
 
         mockMvc.perform(post("/api/2.0/mlflow/scorers/register")
                 .content("{\"experiment_id\": \"1\", \"name\": \"scorer1\", \"serialized_scorer\": \"{}\"}")
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.scorerId").value("s1"))
-                .andExpect(jsonPath("$.scorerName").value("scorer1"));
+                .andExpect(jsonPath("$.scorer.scorerId").value("s1"))
+                .andExpect(jsonPath("$.scorer.scorerName").value("scorer1"));
     }
 
     @Test

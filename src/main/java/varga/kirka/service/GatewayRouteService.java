@@ -1,7 +1,7 @@
 package varga.kirka.service;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import varga.kirka.model.GatewayRoute;
 import varga.kirka.repo.GatewayRouteRepository;
@@ -14,19 +14,20 @@ import java.util.stream.Collectors;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class GatewayRouteService {
 
     private static final String RESOURCE_TYPE = "route";
 
-    @Autowired
-    private GatewayRouteRepository gatewayRouteRepository;
+    private final GatewayRouteRepository gatewayRouteRepository;
 
-    @Autowired
-    private SecurityContextHelper securityContextHelper;
+    private final SecurityContextHelper securityContextHelper;
 
     public GatewayRoute createRoute(GatewayRoute route) {
         try {
-            // Set current user as owner
+            if (route.getName() == null || route.getName().isBlank()) {
+                throw new IllegalArgumentException("Route name must not be empty");
+            }
             String currentUser = securityContextHelper.getCurrentUser();
             route.setCreatedBy(currentUser);
             gatewayRouteRepository.saveRoute(route);
@@ -40,9 +41,10 @@ public class GatewayRouteService {
     public GatewayRoute getRoute(String name) {
         try {
             GatewayRoute route = gatewayRouteRepository.getRouteByName(name);
-            if (route != null) {
-                securityContextHelper.checkReadAccess(RESOURCE_TYPE, name, route.getCreatedBy(), Map.of());
+            if (route == null) {
+                throw new ResourceNotFoundException("GatewayRoute", name);
             }
+            securityContextHelper.checkReadAccess(RESOURCE_TYPE, name, route.getCreatedBy(), Map.of());
             return route;
         } catch (IOException e) {
             log.error("Failed to get route from HBase", e);
@@ -53,9 +55,8 @@ public class GatewayRouteService {
     public List<GatewayRoute> listRoutes() {
         try {
             List<GatewayRoute> routes = gatewayRouteRepository.listRoutes();
-            // Filter routes based on read access
             return routes.stream()
-                    .filter(route -> securityContextHelper.canRead(RESOURCE_TYPE, route.getName(), 
+                    .filter(route -> securityContextHelper.canRead(RESOURCE_TYPE, route.getName(),
                             route.getCreatedBy(), Map.of()))
                     .collect(Collectors.toList());
         } catch (IOException e) {
@@ -68,10 +69,9 @@ public class GatewayRouteService {
         try {
             GatewayRoute existing = gatewayRouteRepository.getRouteByName(name);
             if (existing == null) {
-                throw new RuntimeException("Route not found: " + name);
+                throw new ResourceNotFoundException("GatewayRoute", name);
             }
 
-            // Check write access
             securityContextHelper.checkWriteAccess(RESOURCE_TYPE, name, existing.getCreatedBy(), Map.of());
 
             if (updates.containsKey("route_type")) {
@@ -100,9 +100,10 @@ public class GatewayRouteService {
     public void deleteRoute(String name) {
         try {
             GatewayRoute route = gatewayRouteRepository.getRouteByName(name);
-            if (route != null) {
-                securityContextHelper.checkDeleteAccess(RESOURCE_TYPE, name, route.getCreatedBy(), Map.of());
+            if (route == null) {
+                throw new ResourceNotFoundException("GatewayRoute", name);
             }
+            securityContextHelper.checkDeleteAccess(RESOURCE_TYPE, name, route.getCreatedBy(), Map.of());
             gatewayRouteRepository.deleteRoute(name);
         } catch (IOException e) {
             log.error("Failed to delete route from HBase", e);

@@ -1,7 +1,7 @@
 package varga.kirka.controller;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
 import varga.kirka.model.*;
@@ -15,19 +15,17 @@ import java.util.Map;
 @Slf4j
 @RestController
 @RequestMapping("/api")
+@RequiredArgsConstructor
 public class GatewayController {
 
-    @Autowired
-    private GatewaySecretService gatewaySecretService;
+    private final GatewaySecretService gatewaySecretService;
+
+    private final GatewayRouteService gatewayRouteService;
+
+    private final GatewayEndpointService gatewayEndpointService;
 
     @Value("${spring.application.name:kirka}")
     private String applicationName;
-
-    @Autowired
-    private GatewayRouteService gatewayRouteService;
-
-    @Autowired
-    private GatewayEndpointService gatewayEndpointService;
 
     @lombok.Data
     public static class CreateSecretRequest {
@@ -60,11 +58,11 @@ public class GatewayController {
     @PostMapping("/2.0/mlflow/gateway/secrets/create")
     public Map<String, GatewaySecretInfo> createSecret(@RequestBody CreateSecretRequest request) {
         GatewaySecretInfo secret = gatewaySecretService.createSecret(
-                request.secret_name,
-                request.secret_value,
-                request.provider,
-                request.auth_config,
-                request.created_by
+                request.getSecret_name(),
+                request.getSecret_value(),
+                request.getProvider(),
+                request.getAuth_config(),
+                request.getCreated_by()
         );
         return Map.of("secret", secret);
     }
@@ -72,17 +70,17 @@ public class GatewayController {
     @PostMapping("/2.0/mlflow/gateway/secrets/update")
     public Map<String, GatewaySecretInfo> updateSecret(@RequestBody UpdateSecretRequest request) {
         GatewaySecretInfo secret = gatewaySecretService.updateSecret(
-                request.secret_id,
-                request.secret_value,
-                request.auth_config,
-                request.updated_by
+                request.getSecret_id(),
+                request.getSecret_value(),
+                request.getAuth_config(),
+                request.getUpdated_by()
         );
         return Map.of("secret", secret);
     }
 
     @DeleteMapping("/2.0/mlflow/gateway/secrets/delete")
     public void deleteSecret(@RequestBody DeleteSecretRequest request) {
-        gatewaySecretService.deleteSecret(request.secret_id);
+        gatewaySecretService.deleteSecret(request.getSecret_id());
     }
 
     @GetMapping("/2.0/mlflow/gateway/secrets/get")
@@ -237,8 +235,8 @@ public class GatewayController {
     }
 
     @DeleteMapping("/2.0/mlflow/gateway/endpoints/delete-tag")
-    public void deleteTag(@RequestParam(required = false) String endpoint_id, 
-                          @RequestParam(required = false) String key, 
+    public void deleteTag(@RequestParam(required = false) String endpoint_id,
+                          @RequestParam(required = false) String key,
                           @RequestBody(required = false) DeleteTagRequest body) {
         String eid = endpoint_id;
         String k = key;

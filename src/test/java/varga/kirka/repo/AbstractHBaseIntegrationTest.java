@@ -55,7 +55,7 @@ public abstract class AbstractHBaseIntegrationTest {
     }
 
     private static void createTables() throws IOException {
-        String[] tables = {"mlflow_experiments", "mlflow_runs", "mlflow_metric_history", "mlflow_registered_models", "mlflow_model_versions", "mlflow_scorers", "mlflow_prompts"};
+        String[] tables = {"mlflow_experiments", "mlflow_experiments_name_index", "mlflow_runs", "mlflow_metric_history", "mlflow_registered_models", "mlflow_model_versions", "mlflow_scorers", "mlflow_prompts"};
         for (String table : tables) {
             utility.createTable(TableName.valueOf(table), new byte[][]{Bytes.toBytes("info"), Bytes.toBytes("params"), Bytes.toBytes("metrics"), Bytes.toBytes("tags")});
             utility.waitTableEnabled(TableName.valueOf(table), 60000);

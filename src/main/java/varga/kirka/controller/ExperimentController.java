@@ -1,10 +1,10 @@
 package varga.kirka.controller;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import varga.kirka.model.Experiment;
 import varga.kirka.model.ExperimentTag;
 import varga.kirka.service.ExperimentService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
@@ -15,10 +15,10 @@ import java.util.stream.Collectors;
 @Slf4j
 @RestController
 @RequestMapping("/api/2.0/mlflow/experiments")
+@RequiredArgsConstructor
 public class ExperimentController {
 
-    @Autowired
-    private ExperimentService experimentService;
+    private final ExperimentService experimentService;
 
     @lombok.Data
     public static class CreateExperimentRequest {

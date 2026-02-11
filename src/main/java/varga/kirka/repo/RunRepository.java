@@ -1,10 +1,10 @@
 package varga.kirka.repo;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import varga.kirka.model.*;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.*;
 import org.apache.hadoop.hbase.util.Bytes;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 
 import java.io.IOException;
@@ -16,6 +16,7 @@ import java.util.NavigableMap;
 
 @Slf4j
 @Repository
+@RequiredArgsConstructor
 public class RunRepository {
 
     private static final String TABLE_NAME = "mlflow_runs";
@@ -31,8 +32,7 @@ public class RunRepository {
     private static final byte[] COL_END_TIME = Bytes.toBytes("end_time");
     private static final byte[] COL_ARTIFACT_URI = Bytes.toBytes("artifact_uri");
 
-    @Autowired
-    private Connection connection;
+    private final Connection connection;
 
     public void createRun(Run run) throws IOException {
         log.info("HBase: creating run {}", run.getInfo().getRunId());
