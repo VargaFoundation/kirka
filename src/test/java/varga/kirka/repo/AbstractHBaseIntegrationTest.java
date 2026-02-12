@@ -55,11 +55,22 @@ public abstract class AbstractHBaseIntegrationTest {
     }
 
     private static void createTables() throws IOException {
-        String[] tables = {"mlflow_experiments", "mlflow_experiments_name_index", "mlflow_runs", "mlflow_metric_history", "mlflow_registered_models", "mlflow_model_versions", "mlflow_scorers", "mlflow_prompts"};
-        for (String table : tables) {
-            utility.createTable(TableName.valueOf(table), new byte[][]{Bytes.toBytes("info"), Bytes.toBytes("params"), Bytes.toBytes("metrics"), Bytes.toBytes("tags")});
+        byte[][] standardCFs = {Bytes.toBytes("info"), Bytes.toBytes("params"), Bytes.toBytes("metrics"), Bytes.toBytes("tags")};
+        String[] standardTables = {
+                "mlflow_experiments", "mlflow_experiments_name_index", "mlflow_runs",
+                "mlflow_metric_history", "mlflow_registered_models", "mlflow_model_versions",
+                "mlflow_scorers", "mlflow_prompts",
+                "mlflow_gateway_routes", "mlflow_gateway_endpoints"
+        };
+        for (String table : standardTables) {
+            utility.createTable(TableName.valueOf(table), standardCFs);
             utility.waitTableEnabled(TableName.valueOf(table), 60000);
         }
+
+        // Gateway secrets table needs an extra "values" column family for secret storage
+        utility.createTable(TableName.valueOf("mlflow_gateway_secrets"),
+                new byte[][]{Bytes.toBytes("info"), Bytes.toBytes("values")});
+        utility.waitTableEnabled(TableName.valueOf("mlflow_gateway_secrets"), 60000);
     }
 
     @AfterAll
@@ -70,7 +81,7 @@ public abstract class AbstractHBaseIntegrationTest {
     }
 
     @TestConfiguration
-    static class HBaseTestConfig {
+    public static class HBaseTestConfig {
         @Bean("fileSystem")
         @Primary
         public org.apache.hadoop.fs.FileSystem testFileSystem() throws IOException {
