@@ -1,0 +1,62 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/varga-foundation/kirka
+  tag: latest
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  name: ""
+
+service:
+  type: ClusterIP
+  port: 8080
+
+resources:
+  limits:
+    memory: "1Gi"
+    cpu: "1000m"
+  requests:
+    memory: "512Mi"
+    cpu: "500m"
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+config:
+  # HBase
+  hbaseZookeeperQuorum: "localhost"
+  hbaseZookeeperPort: "2181"
+  # HDFS
+  hdfsUri: "hdfs://localhost:9000"
+  # Security
+  securityEnabled: "false"
+  securityAuthType: "basic"
+  securityAdminUsers: "admin"
+  # Kerberos
+  kerberosEnabled: "false"
+  kerberosPrincipal: ""
+  kerberosKeytab: ""
+  # Ranger
+  rangerServiceName: "kirka"
+  rangerAdminUrl: "http://localhost:6080"
+
+livenessProbe:
+  httpGet:
+    path: /actuator/health/liveness
+    port: http
+  initialDelaySeconds: 30
+  periodSeconds: 10
+
+readinessProbe:
+  httpGet:
+    path: /actuator/health/readiness
+    port: http
+  initialDelaySeconds: 15
+  periodSeconds: 5

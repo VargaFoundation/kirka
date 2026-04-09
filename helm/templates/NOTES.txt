@@ -1,0 +1,15 @@
+Kirka a ete deploye avec succes !
+
+1. Verifier le statut des pods :
+   kubectl get pods -n {{ .Release.Namespace }} -l app.kubernetes.io/name={{ include "kirka.name" . }}
+
+2. Acceder au service :
+   kubectl port-forward svc/{{ include "kirka.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }} -n {{ .Release.Namespace }}
+
+3. Verifier la sante :
+   curl http://localhost:{{ .Values.service.port }}/actuator/health
+
+4. Acceder aux metriques Prometheus :
+   curl http://localhost:{{ .Values.service.port }}/actuator/prometheus
+
+L'API MLFlow est disponible sur le port {{ .Values.service.port }}.

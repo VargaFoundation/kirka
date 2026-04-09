@@ -1,0 +1,6 @@
+apiVersion: v2
+name: kirka
+description: Helm chart pour deployer Kirka - service MLFlow compatible pour Hadoop
+type: application
+version: 1.0.0
+appVersion: "0.0.1-SNAPSHOT"

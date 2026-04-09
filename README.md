@@ -137,7 +137,85 @@ export MLFLOW_TRACKING_PASSWORD=admin-password
 export MLFLOW_TRACKING_INSECURE_TLS=true
 ```
 
-## Running the Application
+## Docker
+
+Build and run the Docker image:
+
+```bash
+docker build -t kirka:latest .
+docker run -p 8080:8080 kirka:latest
+```
+
+The image is automatically built and pushed to GitHub Container Registry via GitHub Actions on every push to `main`:
+
+```bash
+docker pull ghcr.io/varga-foundation/kirka:latest
+```
+
+## Deployment on Kubernetes (Helm)
+
+Kirka is available as a Helm chart on GitHub Container Registry (OCI).
+
+### Install from the OCI registry
+
+```bash
+helm install kirka oci://ghcr.io/varga-foundation/charts/kirka --version 1.0.0 \
+  --namespace kirka --create-namespace \
+  --set config.hbaseZookeeperQuorum=zk1:2181 \
+  --set config.hdfsUri=hdfs://namenode:9000
+```
+
+### Install from local sources
+
+```bash
+helm install kirka ./helm -n kirka --create-namespace
+```
+
+### Configuration
+
+Override values at install time or create a `values.override.yaml`:
+
+```yaml
+replicaCount: 2
+config:
+  hbaseZookeeperQuorum: "zk1:2181,zk2:2181,zk3:2181"
+  hbaseZookeeperPort: "2181"
+  hdfsUri: "hdfs://namenode:9000"
+  securityEnabled: "true"
+  securityAuthType: "kerberos"
+  rangerServiceName: "kirka"
+  rangerAdminUrl: "http://ranger:6080"
+```
+
+```bash
+helm install kirka oci://ghcr.io/varga-foundation/charts/kirka --version 1.0.0 \
+  -f values.override.yaml -n kirka --create-namespace
+```
+
+### Verify
+
+```bash
+kubectl get pods -n kirka
+curl http://localhost:8080/actuator/health
+curl http://localhost:8080/actuator/prometheus
+```
+
+### Uninstall
+
+```bash
+helm uninstall kirka -n kirka
+```
+
+## CI/CD
+
+GitHub Actions automatically:
+1. Builds the Maven project and runs tests.
+2. Builds and pushes the Docker image to `ghcr.io/varga-foundation/kirka`.
+3. Packages and pushes the Helm chart to `oci://ghcr.io/varga-foundation/charts/kirka`.
+
+Triggers: push/PR to `main`/`master`, or manual dispatch.
+
+## Running Locally
 
 You can run the application using Maven:
 
