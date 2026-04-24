@@ -102,9 +102,12 @@ public class ArtifactControllerTest {
     public void testListArtifactsRunNotFound() throws Exception {
         when(runService.getRun("nonexistent")).thenReturn(null);
 
+        // A missing run raises IllegalArgumentException, which GlobalExceptionHandler now maps
+        // to 400 INVALID_PARAMETER_VALUE (previously bubbled up as 500 when no handler was
+        // registered for the web slice).
         mockMvc.perform(get("/api/2.0/mlflow/artifacts/list")
                 .param("run_id", "nonexistent")
                 .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isInternalServerError());
+                .andExpect(status().isBadRequest());
     }
 }

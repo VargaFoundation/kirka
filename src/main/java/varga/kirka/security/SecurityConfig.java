@@ -35,8 +35,12 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                // Public endpoints (health checks, actuator)
-                .requestMatchers("/actuator/**", "/health", "/ping", "/version").permitAll()
+                // Publicly reachable probes/metrics (no secret material leaked by these endpoints)
+                .requestMatchers("/actuator/health", "/actuator/health/**",
+                                 "/actuator/info", "/actuator/prometheus",
+                                 "/ping", "/version").permitAll()
+                // env/loggers/beans and any other actuator endpoint: admin only
+                .requestMatchers("/actuator/**").hasRole("ADMIN")
                 // All other endpoints require authentication
                 .anyRequest().authenticated()
             )

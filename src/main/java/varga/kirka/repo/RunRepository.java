@@ -2,6 +2,7 @@ package varga.kirka.repo;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import varga.kirka.model.*;
+import varga.kirka.util.HBaseResults;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.*;
 import org.apache.hadoop.hbase.util.Bytes;
@@ -9,10 +10,8 @@ import org.springframework.stereotype.Repository;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.NavigableMap;
 
 @Slf4j
 @Repository
@@ -83,10 +82,23 @@ public class RunRepository {
         }
     }
 
+    /** Upper bound on the number of entries (metrics+params+tags) accepted in a single log-batch. */
+    private static final int LOG_BATCH_LIMIT = 1000;
+
     public void logBatch(String runId, List<Metric> metrics, List<Param> params, List<RunTag> tags) throws IOException {
+        int entryCount = (metrics != null ? metrics.size() : 0)
+                + (params != null ? params.size() : 0)
+                + (tags != null ? tags.size() : 0);
+        if (entryCount > LOG_BATCH_LIMIT) {
+            throw new IllegalArgumentException(
+                    "log-batch is capped at " + LOG_BATCH_LIMIT + " entries, received " + entryCount);
+        }
+
         try (Table table = connection.getTable(TableName.valueOf(TABLE_NAME));
              Table historyTable = connection.getTable(TableName.valueOf(METRIC_HISTORY_TABLE))) {
-            Put put = new Put(Bytes.toBytes(runId));
+            Put runPut = new Put(Bytes.toBytes(runId));
+            List<Put> historyBatch = new ArrayList<>(metrics != null ? metrics.size() : 0);
+
             if (metrics != null) {
                 for (Metric m : metrics) {
                     String key = m.getKey();
@@ -94,31 +106,38 @@ public class RunRepository {
                     long timestamp = m.getTimestamp();
                     long step = m.getStep();
 
-                    // Update latest value in runs table
-                    put.addColumn(CF_METRICS, Bytes.toBytes(key), Bytes.toBytes(value));
+                    // Latest value in the runs table
+                    runPut.addColumn(CF_METRICS, Bytes.toBytes(key), Bytes.toBytes(value));
 
-                    // Add to history table
-                    // Row key: runId + key + timestamp (reversed for scan)
-                    byte[] historyRowKey = Bytes.toBytes(runId + "_" + key + "_" + (Long.MAX_VALUE - timestamp));
+                    // History row key: runId + key + reversed timestamp, padded to fixed width so
+                    // lexicographic scans return points in descending timestamp order (older last).
+                    String paddedRev = String.format("%019d", Long.MAX_VALUE - timestamp);
+                    byte[] historyRowKey = Bytes.toBytes(runId + "_" + key + "_" + paddedRev);
                     Put historyPut = new Put(historyRowKey);
-                    historyPut.addColumn(CF_INFO, Bytes.toBytes("key"), Bytes.toBytes(key));
-                    historyPut.addColumn(CF_INFO, Bytes.toBytes("value"), Bytes.toBytes(value));
-                    historyPut.addColumn(CF_INFO, Bytes.toBytes("timestamp"), Bytes.toBytes(timestamp));
-                    historyPut.addColumn(CF_INFO, Bytes.toBytes("step"), Bytes.toBytes(step));
-                    historyTable.put(historyPut);
+                    historyPut.addColumn(CF_INFO, COL_HISTORY_KEY, Bytes.toBytes(key));
+                    historyPut.addColumn(CF_INFO, COL_HISTORY_VALUE, Bytes.toBytes(value));
+                    historyPut.addColumn(CF_INFO, COL_HISTORY_TIMESTAMP, Bytes.toBytes(timestamp));
+                    historyPut.addColumn(CF_INFO, COL_HISTORY_STEP, Bytes.toBytes(step));
+                    historyBatch.add(historyPut);
                 }
             }
             if (params != null) {
                 for (Param p : params) {
-                    put.addColumn(CF_PARAMS, Bytes.toBytes(p.getKey()), Bytes.toBytes(p.getValue()));
+                    runPut.addColumn(CF_PARAMS, Bytes.toBytes(p.getKey()), Bytes.toBytes(p.getValue()));
                 }
             }
             if (tags != null) {
                 for (RunTag t : tags) {
-                    put.addColumn(CF_TAGS, Bytes.toBytes(t.getKey()), Bytes.toBytes(t.getValue()));
+                    runPut.addColumn(CF_TAGS, Bytes.toBytes(t.getKey()), Bytes.toBytes(t.getValue()));
                 }
             }
-            table.put(put);
+
+            if (!runPut.isEmpty()) {
+                table.put(runPut);
+            }
+            if (!historyBatch.isEmpty()) {
+                historyTable.put(historyBatch);
+            }
         }
     }
 
@@ -198,19 +217,13 @@ public class RunRepository {
             }
         }
 
-        byte[] experimentId = result.getValue(CF_INFO, COL_EXPERIMENT_ID);
-        byte[] statusBytes = result.getValue(CF_INFO, COL_STATUS);
-        byte[] startTime = result.getValue(CF_INFO, COL_START_TIME);
-        byte[] endTime = result.getValue(CF_INFO, COL_END_TIME);
-        byte[] artifactUri = result.getValue(CF_INFO, COL_ARTIFACT_URI);
-        byte[] lifecycleStage = result.getValue(CF_INFO, Bytes.toBytes("lifecycle_stage"));
-
+        String statusString = HBaseResults.getStringOrNull(result, CF_INFO, COL_STATUS);
         RunStatus status = RunStatus.RUNNING;
-        if (statusBytes != null) {
+        if (statusString != null) {
             try {
-                status = RunStatus.valueOf(Bytes.toString(statusBytes));
-            } catch (Exception e) {
-                log.warn("Could not parse status: {}", Bytes.toString(statusBytes));
+                status = RunStatus.valueOf(statusString);
+            } catch (IllegalArgumentException e) {
+                log.warn("Could not parse run status: {}", statusString);
             }
         }
 
@@ -218,12 +231,12 @@ public class RunRepository {
                 .info(RunInfo.builder()
                         .runId(runId)
                         .runUuid(runId)
-                        .experimentId(experimentId != null ? Bytes.toString(experimentId) : null)
+                        .experimentId(HBaseResults.getStringOrNull(result, CF_INFO, COL_EXPERIMENT_ID))
                         .status(status)
-                        .startTime(startTime != null ? Bytes.toLong(startTime) : 0L)
-                        .endTime(endTime != null ? Bytes.toLong(endTime) : 0L)
-                        .artifactUri(artifactUri != null ? Bytes.toString(artifactUri) : null)
-                        .lifecycleStage(lifecycleStage != null ? Bytes.toString(lifecycleStage) : "active")
+                        .startTime(HBaseResults.getLongOrDefault(result, CF_INFO, COL_START_TIME, 0L))
+                        .endTime(HBaseResults.getLongOrDefault(result, CF_INFO, COL_END_TIME, 0L))
+                        .artifactUri(HBaseResults.getStringOrNull(result, CF_INFO, COL_ARTIFACT_URI))
+                        .lifecycleStage(HBaseResults.getStringOrDefault(result, CF_INFO, Bytes.toBytes("lifecycle_stage"), "active"))
                         .build())
                 .data(RunData.builder()
                         .metrics(metrics)
@@ -243,62 +256,30 @@ public class RunRepository {
         }
     }
 
-    public List<varga.kirka.model.Metric> getMetricHistory(String runId, String metricKey) throws IOException {
-        List<varga.kirka.model.Metric> history = new ArrayList<>();
+    private static final byte[] COL_HISTORY_KEY = Bytes.toBytes("key");
+    private static final byte[] COL_HISTORY_VALUE = Bytes.toBytes("value");
+    private static final byte[] COL_HISTORY_TIMESTAMP = Bytes.toBytes("timestamp");
+    private static final byte[] COL_HISTORY_STEP = Bytes.toBytes("step");
+
+    public List<Metric> getMetricHistory(String runId, String metricKey) throws IOException {
+        List<Metric> history = new ArrayList<>();
         try (Table table = connection.getTable(TableName.valueOf(METRIC_HISTORY_TABLE))) {
             Scan scan = new Scan();
-            // Prefix filter for runId and metricKey
             String prefix = runId + "_" + metricKey + "_";
             scan.setRowPrefixFilter(Bytes.toBytes(prefix));
-            
+            scan.setCaching(100);
+
             try (ResultScanner scanner = table.getScanner(scan)) {
                 for (Result result : scanner) {
-                    history.add(varga.kirka.model.Metric.builder()
-                            .key(Bytes.toString(result.getValue(CF_INFO, Bytes.toBytes("key"))))
-                            .value(Bytes.toDouble(result.getValue(CF_INFO, Bytes.toBytes("value"))))
-                            .timestamp(Bytes.toLong(result.getValue(CF_INFO, Bytes.toBytes("timestamp"))))
-                            .step(Bytes.toLong(result.getValue(CF_INFO, Bytes.toBytes("step"))))
+                    history.add(Metric.builder()
+                            .key(HBaseResults.getStringOrDefault(result, CF_INFO, COL_HISTORY_KEY, metricKey))
+                            .value(HBaseResults.getDoubleOrDefault(result, CF_INFO, COL_HISTORY_VALUE, 0d))
+                            .timestamp(HBaseResults.getLongOrDefault(result, CF_INFO, COL_HISTORY_TIMESTAMP, 0L))
+                            .step(HBaseResults.getLongOrDefault(result, CF_INFO, COL_HISTORY_STEP, 0L))
                             .build());
                 }
             }
         }
-        // Result is already sorted by timestamp (reversed) due to row key design
         return history;
-    }
-
-    private List<Param> extractParams(Result result) {
-        List<Param> list = new ArrayList<>();
-        java.util.NavigableMap<byte[], byte[]> map = result.getFamilyMap(CF_PARAMS);
-        if (map != null) {
-            for (Map.Entry<byte[], byte[]> entry : map.entrySet()) {
-                list.add(new Param(Bytes.toString(entry.getKey()), Bytes.toString(entry.getValue())));
-            }
-        }
-        return list;
-    }
-
-    private List<RunTag> extractTags(Result result) {
-        List<RunTag> list = new ArrayList<>();
-        java.util.NavigableMap<byte[], byte[]> map = result.getFamilyMap(CF_TAGS);
-        if (map != null) {
-            for (Map.Entry<byte[], byte[]> entry : map.entrySet()) {
-                list.add(new RunTag(Bytes.toString(entry.getKey()), Bytes.toString(entry.getValue())));
-            }
-        }
-        return list;
-    }
-
-    private List<Metric> extractMetrics(Result result) {
-        List<Metric> map = new ArrayList<>();
-        java.util.NavigableMap<byte[], byte[]> familyMap = result.getFamilyMap(CF_METRICS);
-        if (familyMap != null) {
-            for (Map.Entry<byte[], byte[]> entry : familyMap.entrySet()) {
-                map.add(Metric.builder()
-                        .key(Bytes.toString(entry.getKey()))
-                        .value(Bytes.toDouble(entry.getValue()))
-                        .build());
-            }
-        }
-        return map;
     }
 }

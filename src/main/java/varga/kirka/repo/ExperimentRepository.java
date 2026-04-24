@@ -3,6 +3,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import varga.kirka.model.Experiment;
 import varga.kirka.model.ExperimentTag;
+import varga.kirka.util.HBaseResults;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.*;
 import org.apache.hadoop.hbase.util.Bytes;
@@ -11,7 +12,6 @@ import org.springframework.stereotype.Repository;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Repository
@@ -34,40 +34,50 @@ public class ExperimentRepository {
 
     public void createExperiment(Experiment experiment) throws IOException {
         log.info("HBase: creating experiment {} ({})", experiment.getName(), experiment.getExperimentId());
-        
-        // Check if experiment name already exists using the name index
-        String existingId = getExperimentIdByName(experiment.getName());
-        if (existingId != null) {
-            throw new ExperimentAlreadyExistsException(experiment.getName());
-        }
-        
+
         try (Table table = connection.getTable(TableName.valueOf(TABLE_NAME));
              Table indexTable = connection.getTable(TableName.valueOf(NAME_INDEX_TABLE_NAME))) {
-            Put put = new Put(Bytes.toBytes(experiment.getExperimentId()));
-            put.addColumn(CF_INFO, COL_NAME, Bytes.toBytes(experiment.getName()));
-            if (experiment.getArtifactLocation() != null) {
-                put.addColumn(CF_INFO, COL_ARTIFACT_LOCATION, Bytes.toBytes(experiment.getArtifactLocation()));
-            }
-            put.addColumn(CF_INFO, COL_LIFECYCLE_STAGE, Bytes.toBytes(experiment.getLifecycleStage()));
-            put.addColumn(CF_INFO, COL_CREATION_TIME, Bytes.toBytes(experiment.getCreationTime()));
-            put.addColumn(CF_INFO, COL_LAST_UPDATE_TIME, Bytes.toBytes(experiment.getLastUpdateTime()));
-            
-            if (experiment.getOwner() != null) {
-                put.addColumn(CF_INFO, COL_OWNER, Bytes.toBytes(experiment.getOwner()));
-            }
-            
-            if (experiment.getTags() != null) {
-                for (ExperimentTag tag : experiment.getTags()) {
-                    put.addColumn(CF_TAGS, Bytes.toBytes(tag.getKey()), Bytes.toBytes(tag.getValue()));
-                }
-            }
-            
-            table.put(put);
-            
-            // Add entry to name index (name -> experiment_id)
-            Put indexPut = new Put(Bytes.toBytes(experiment.getName()));
+
+            // Claim the name slot atomically: CheckAndMutate ifNotExists. Only one concurrent
+            // creator wins; the others observe the row and raise ExperimentAlreadyExistsException.
+            byte[] nameRow = Bytes.toBytes(experiment.getName());
+            Put indexPut = new Put(nameRow);
             indexPut.addColumn(CF_INFO, COL_EXPERIMENT_ID, Bytes.toBytes(experiment.getExperimentId()));
-            indexTable.put(indexPut);
+            CheckAndMutate claim = CheckAndMutate.newBuilder(nameRow)
+                    .ifNotExists(CF_INFO, COL_EXPERIMENT_ID)
+                    .build(indexPut);
+            if (!indexTable.checkAndMutate(claim).isSuccess()) {
+                throw new ExperimentAlreadyExistsException(experiment.getName());
+            }
+
+            try {
+                Put put = new Put(Bytes.toBytes(experiment.getExperimentId()));
+                put.addColumn(CF_INFO, COL_NAME, Bytes.toBytes(experiment.getName()));
+                if (experiment.getArtifactLocation() != null) {
+                    put.addColumn(CF_INFO, COL_ARTIFACT_LOCATION, Bytes.toBytes(experiment.getArtifactLocation()));
+                }
+                put.addColumn(CF_INFO, COL_LIFECYCLE_STAGE, Bytes.toBytes(experiment.getLifecycleStage()));
+                put.addColumn(CF_INFO, COL_CREATION_TIME, Bytes.toBytes(experiment.getCreationTime()));
+                put.addColumn(CF_INFO, COL_LAST_UPDATE_TIME, Bytes.toBytes(experiment.getLastUpdateTime()));
+                if (experiment.getOwner() != null) {
+                    put.addColumn(CF_INFO, COL_OWNER, Bytes.toBytes(experiment.getOwner()));
+                }
+                if (experiment.getTags() != null) {
+                    for (ExperimentTag tag : experiment.getTags()) {
+                        put.addColumn(CF_TAGS, Bytes.toBytes(tag.getKey()), Bytes.toBytes(tag.getValue()));
+                    }
+                }
+                table.put(put);
+            } catch (IOException | RuntimeException e) {
+                // Main row write failed: roll back the name claim so the slot stays reusable.
+                try {
+                    indexTable.delete(new Delete(nameRow));
+                } catch (IOException rollback) {
+                    log.error("Failed to roll back name index after primary write error for experiment {}",
+                            experiment.getName(), rollback);
+                }
+                throw e;
+            }
         }
     }
     
@@ -116,40 +126,49 @@ public class ExperimentRepository {
     }
 
     public void updateExperiment(String experimentId, String newName) throws IOException {
-        // Get the current experiment to find the old name
         Experiment currentExperiment = getExperiment(experimentId);
         if (currentExperiment == null) {
             return;
         }
-        
         String oldName = currentExperiment.getName();
-        
-        // If the name is changing, check uniqueness and update the index
-        if (!oldName.equals(newName)) {
-            // Check if new name already exists
-            String existingId = getExperimentIdByName(newName);
-            if (existingId != null) {
-                throw new ExperimentAlreadyExistsException(newName);
-            }
-        }
-        
+
         try (Table table = connection.getTable(TableName.valueOf(TABLE_NAME));
              Table indexTable = connection.getTable(TableName.valueOf(NAME_INDEX_TABLE_NAME))) {
-            Put put = new Put(Bytes.toBytes(experimentId));
-            put.addColumn(CF_INFO, COL_NAME, Bytes.toBytes(newName));
-            put.addColumn(CF_INFO, COL_LAST_UPDATE_TIME, Bytes.toBytes(System.currentTimeMillis()));
-            table.put(put);
-            
-            // Update the name index if the name changed
+
             if (!oldName.equals(newName)) {
-                // Delete old name from index
-                Delete deleteOldIndex = new Delete(Bytes.toBytes(oldName));
-                indexTable.delete(deleteOldIndex);
-                
-                // Add new name to index
-                Put indexPut = new Put(Bytes.toBytes(newName));
-                indexPut.addColumn(CF_INFO, COL_EXPERIMENT_ID, Bytes.toBytes(experimentId));
-                indexTable.put(indexPut);
+                // Atomically claim the new name slot before changing anything else.
+                byte[] newNameRow = Bytes.toBytes(newName);
+                Put claimPut = new Put(newNameRow);
+                claimPut.addColumn(CF_INFO, COL_EXPERIMENT_ID, Bytes.toBytes(experimentId));
+                CheckAndMutate claim = CheckAndMutate.newBuilder(newNameRow)
+                        .ifNotExists(CF_INFO, COL_EXPERIMENT_ID)
+                        .build(claimPut);
+                if (!indexTable.checkAndMutate(claim).isSuccess()) {
+                    throw new ExperimentAlreadyExistsException(newName);
+                }
+
+                try {
+                    Put put = new Put(Bytes.toBytes(experimentId));
+                    put.addColumn(CF_INFO, COL_NAME, Bytes.toBytes(newName));
+                    put.addColumn(CF_INFO, COL_LAST_UPDATE_TIME, Bytes.toBytes(System.currentTimeMillis()));
+                    table.put(put);
+
+                    // Drop the old name only after the primary row was updated; if this last step
+                    // fails the reconciler is expected to GC the stale entry on the next pass.
+                    indexTable.delete(new Delete(Bytes.toBytes(oldName)));
+                } catch (IOException | RuntimeException e) {
+                    try {
+                        indexTable.delete(new Delete(newNameRow));
+                    } catch (IOException rollback) {
+                        log.error("Failed to roll back new-name index after update error for experiment {}",
+                                experimentId, rollback);
+                    }
+                    throw e;
+                }
+            } else {
+                Put put = new Put(Bytes.toBytes(experimentId));
+                put.addColumn(CF_INFO, COL_LAST_UPDATE_TIME, Bytes.toBytes(System.currentTimeMillis()));
+                table.put(put);
             }
         }
     }
@@ -175,29 +194,31 @@ public class ExperimentRepository {
     }
 
     public void restoreExperiment(String experimentId) throws IOException {
-        // Get current experiment to restore its name in the index
         Experiment experiment = getExperiment(experimentId);
         if (experiment == null) {
             return;
         }
 
-        // Check if the name is now taken by another experiment
-        String existingId = getExperimentIdByName(experiment.getName());
-        if (existingId != null && !existingId.equals(experimentId)) {
-            throw new ExperimentAlreadyExistsException(experiment.getName());
-        }
-
         try (Table table = connection.getTable(TableName.valueOf(TABLE_NAME));
              Table indexTable = connection.getTable(TableName.valueOf(NAME_INDEX_TABLE_NAME))) {
+            // Reclaim the name slot atomically. It's fine if we already own it (we overwrite).
+            byte[] nameRow = Bytes.toBytes(experiment.getName());
+            Put indexPut = new Put(nameRow);
+            indexPut.addColumn(CF_INFO, COL_EXPERIMENT_ID, Bytes.toBytes(experimentId));
+            CheckAndMutate claim = CheckAndMutate.newBuilder(nameRow)
+                    .ifNotExists(CF_INFO, COL_EXPERIMENT_ID)
+                    .build(indexPut);
+            if (!indexTable.checkAndMutate(claim).isSuccess()) {
+                String existingId = getExperimentIdByName(experiment.getName());
+                if (existingId != null && !existingId.equals(experimentId)) {
+                    throw new ExperimentAlreadyExistsException(experiment.getName());
+                }
+            }
+
             Put put = new Put(Bytes.toBytes(experimentId));
             put.addColumn(CF_INFO, COL_LIFECYCLE_STAGE, Bytes.toBytes("active"));
             put.addColumn(CF_INFO, COL_LAST_UPDATE_TIME, Bytes.toBytes(System.currentTimeMillis()));
             table.put(put);
-
-            // Re-add to name index
-            Put indexPut = new Put(Bytes.toBytes(experiment.getName()));
-            indexPut.addColumn(CF_INFO, COL_EXPERIMENT_ID, Bytes.toBytes(experimentId));
-            indexTable.put(indexPut);
         }
     }
 
@@ -221,16 +242,15 @@ public class ExperimentRepository {
     }
 
     private Experiment mapResultToExperiment(Result result) {
-        byte[] ownerBytes = result.getValue(CF_INFO, COL_OWNER);
         return Experiment.builder()
                 .experimentId(Bytes.toString(result.getRow()))
-                .name(Bytes.toString(result.getValue(CF_INFO, COL_NAME)))
-                .artifactLocation(Bytes.toString(result.getValue(CF_INFO, COL_ARTIFACT_LOCATION)))
-                .lifecycleStage(Bytes.toString(result.getValue(CF_INFO, COL_LIFECYCLE_STAGE)))
-                .creationTime(Bytes.toLong(result.getValue(CF_INFO, COL_CREATION_TIME)))
-                .lastUpdateTime(Bytes.toLong(result.getValue(CF_INFO, COL_LAST_UPDATE_TIME)))
+                .name(HBaseResults.getStringOrNull(result, CF_INFO, COL_NAME))
+                .artifactLocation(HBaseResults.getStringOrNull(result, CF_INFO, COL_ARTIFACT_LOCATION))
+                .lifecycleStage(HBaseResults.getStringOrNull(result, CF_INFO, COL_LIFECYCLE_STAGE))
+                .creationTime(HBaseResults.getLongOrDefault(result, CF_INFO, COL_CREATION_TIME, 0L))
+                .lastUpdateTime(HBaseResults.getLongOrDefault(result, CF_INFO, COL_LAST_UPDATE_TIME, 0L))
                 .tags(extractTags(result))
-                .owner(ownerBytes != null ? Bytes.toString(ownerBytes) : null)
+                .owner(HBaseResults.getStringOrNull(result, CF_INFO, COL_OWNER))
                 .build();
     }
 }

@@ -13,6 +13,11 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 
@@ -126,16 +131,55 @@ public class ArtifactController {
     }
 
     /**
-     * Validates that a path does not contain path traversal sequences.
+     * Validates that a user-supplied relative path cannot escape its run's artifact directory.
+     * Rejects encoded traversal (%2e%2e), null bytes, control characters, Windows back-slashes,
+     * absolute paths and any path that, once normalized, still contains a '..' segment.
      */
     private void validatePath(String path) {
-        if (path == null) return;
-        // Normalize and check for traversal attempts
-        String normalized = path.replace("\\", "/");
-        if (normalized.contains("../") || normalized.contains("/..") || normalized.equals("..")) {
-            throw new IllegalArgumentException("Path traversal is not allowed: " + path);
+        if (path == null || path.isEmpty()) return;
+
+        // Defence in depth: decode once in case an upstream proxy forwarded the raw encoding,
+        // then reject double-encoded traversal (%252e...) by refusing any residual '%'.
+        String decoded;
+        try {
+            decoded = URLDecoder.decode(path, StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Malformed path encoding: " + path);
         }
+
+        for (int i = 0; i < decoded.length(); i++) {
+            char c = decoded.charAt(i);
+            if (c == '\0' || (c < 0x20 && c != '\t')) {
+                throw new IllegalArgumentException("Path contains a forbidden control character");
+            }
+        }
+
+        String normalized = decoded.replace('\\', '/');
         if (normalized.startsWith("/")) {
+            throw new IllegalArgumentException("Absolute paths are not allowed: " + path);
+        }
+
+        // Reject any '..' segment before normalization. A path like "a/b/c/../../escape"
+        // would normalize to the safe "a/escape", but such constructions in user input are
+        // suspicious enough to refuse at the boundary.
+        for (String raw : normalized.split("/")) {
+            if (raw.equals("..")) {
+                throw new IllegalArgumentException("Path traversal is not allowed: " + path);
+            }
+        }
+
+        Path canonical;
+        try {
+            canonical = Paths.get(normalized).normalize();
+        } catch (InvalidPathException e) {
+            throw new IllegalArgumentException("Invalid path: " + path);
+        }
+        for (Path segment : canonical) {
+            if (segment.toString().equals("..")) {
+                throw new IllegalArgumentException("Path traversal is not allowed: " + path);
+            }
+        }
+        if (canonical.isAbsolute()) {
             throw new IllegalArgumentException("Absolute paths are not allowed: " + path);
         }
     }
