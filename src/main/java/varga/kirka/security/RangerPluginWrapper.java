@@ -1,162 +1,134 @@
 package varga.kirka.security;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.ranger.plugin.audit.RangerDefaultAuditHandler;
+import org.apache.ranger.plugin.policyengine.RangerAccessRequestImpl;
+import org.apache.ranger.plugin.policyengine.RangerAccessResourceImpl;
+import org.apache.ranger.plugin.policyengine.RangerAccessResult;
+import org.apache.ranger.plugin.service.RangerBasePlugin;
 
-import java.util.HashMap;
+import java.util.Date;
 import java.util.Map;
-import java.util.Set;
 
 /**
- * Wrapper for the Apache Ranger plugin.
- * Encapsulates integration with Ranger for access policy evaluation.
- * 
- * This class handles:
- * - Ranger plugin initialization
- * - Resource-based policy evaluation
- * - Tag-based policy evaluation
- * - Policy caching
+ * Thin wrapper around Apache Ranger's {@link RangerBasePlugin}.
+ *
+ * <p>The plugin pulls policies from Ranger Admin (URL configured in
+ * {@code ranger-<appId>-security.xml} on the classpath) and evaluates them locally,
+ * so an outage of Ranger Admin does not break authorization — the last cached policy set
+ * keeps being used until the next successful refresh.
+ *
+ * <p>When initialisation fails (Ranger Admin unreachable at startup, classpath mismatch,
+ * missing credentials, etc.) the wrapper records the failure and reports
+ * {@link #isInitialized()} {@code == false}. Callers are expected to fall back to a safer
+ * policy (typically owner-only authorization) rather than silently allowing everything.
+ *
+ * <p>This class used to be a stub with toy string-matching helpers ({@code isTeamMember},
+ * {@code isDepartmentMember}). Those have been removed; the real policy engine replaces them.
  */
 @Slf4j
 public class RangerPluginWrapper {
 
-    private final String serviceName;
-    private final String rangerAdminUrl;
-    private final String policyCacheDir;
-    
-    private boolean initialized = false;
+    private final String serviceType;
+    private final String appId;
 
-    // NOTE: This project does not currently bundle the Apache Ranger Java plugin.
-    // The wrapper therefore provides a minimal, internal policy evaluator so that
-    // authorization behavior is deterministic without placeholders.
+    private RangerBasePlugin plugin;
+    private boolean initialized;
 
-    public RangerPluginWrapper(String serviceName, String rangerAdminUrl, String policyCacheDir) {
-        this.serviceName = serviceName;
-        this.rangerAdminUrl = rangerAdminUrl;
-        this.policyCacheDir = policyCacheDir;
+    public RangerPluginWrapper(String serviceType, String appId) {
+        this.serviceType = serviceType;
+        this.appId = appId;
     }
 
     /**
-     * Initializes the Ranger plugin.
-     * Configures the connection to Ranger Admin server and loads policies.
+     * Initialises the Ranger plugin. Must be called before any {@link #isAccessAllowed} call.
+     * On failure the wrapper stays uninitialised and subsequent checks deny by default.
      */
     public void init() {
-        log.info("Initializing Ranger plugin for service: {} with admin URL: {}", 
-                serviceName, rangerAdminUrl);
-        
+        log.info("Initialising Ranger plugin: serviceType={}, appId={}", serviceType, appId);
         try {
+            RangerBasePlugin newPlugin = new RangerBasePlugin(serviceType, appId);
+            newPlugin.init();
+            newPlugin.setResultProcessor(new RangerDefaultAuditHandler());
+            this.plugin = newPlugin;
             this.initialized = true;
-            
-            log.info("Ranger plugin initialized successfully");
-        } catch (Exception e) {
-            log.error("Failed to initialize Ranger plugin: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to initialize Ranger plugin", e);
-        }
-    }
-
-    /**
-     * Checks if access is allowed according to Ranger policies.
-     * 
-     * @param request The access request to evaluate
-     * @return true if access is allowed
-     */
-    public boolean isAccessAllowed(RangerAccessRequest request) {
-        if (!initialized) {
-            log.warn("Ranger plugin not initialized, denying access");
-            return false;
-        }
-
-        try {
-            log.debug("Evaluating Ranger access for user: {}, resource: {}/{}, access: {}",
-                    request.getUser(), request.getResourceType(), 
-                    request.getResourceId(), request.getAccessType());
-
-            return evaluatePolicies(request);
-            
-        } catch (Exception e) {
-            log.error("Error evaluating Ranger access: {}", e.getMessage(), e);
-            return false;
-        }
-    }
-
-    /**
-     * Evaluates tag-based policies.
-     * When the real Ranger plugin is integrated, this method should delegate to it.
-     */
-    private boolean evaluatePolicies(RangerAccessRequest request) {
-        // Policy 1: Admins have access to everything
-        if (isAdmin(request.getUser())) {
-            log.debug("User {} is admin, granting access", request.getUser());
-            return true;
-        }
-
-        // Policy 2: Check resource tags
-        Map<String, String> tags = request.getResourceTags();
-        if (tags != null) {
-            // Tag "public" = read access for everyone
-            if ("true".equalsIgnoreCase(tags.get("public")) && 
-                "read".equalsIgnoreCase(request.getAccessType())) {
-                log.debug("Resource has public tag, granting read access");
-                return true;
-            }
-
-            // Tag "team" = access for team members
-            String teamTag = tags.get("team");
-            if (teamTag != null && isTeamMember(request.getUser(), teamTag)) {
-                log.debug("User {} is member of team {}, granting access", 
-                        request.getUser(), teamTag);
-                return true;
-            }
-
-            // Tag "department" = access for department members
-            String deptTag = tags.get("department");
-            if (deptTag != null && isDepartmentMember(request.getUser(), deptTag)) {
-                log.debug("User {} is member of department {}, granting access",
-                        request.getUser(), deptTag);
-                return true;
-            }
-        }
-
-        // By default, deny access
-        return false;
-    }
-
-    /**
-     * Checks if the user is an admin.
-     * In production, this information comes from Ranger/LDAP.
-     */
-    private boolean isAdmin(String user) {
-        // Admin list (in production, configured in Ranger)
-        Set<String> admins = Set.of("admin", "root", "superuser");
-        return admins.contains(user.toLowerCase());
-    }
-
-    /**
-     * Checks if the user is a member of a team.
-     * In production, this information comes from Ranger/LDAP.
-     */
-    private boolean isTeamMember(String user, String team) {
-        return user.toLowerCase().contains(team.toLowerCase());
-    }
-
-    /**
-     * Checks if the user belongs to a department.
-     * In production, this information comes from Ranger/LDAP.
-     */
-    private boolean isDepartmentMember(String user, String department) {
-        return user.toLowerCase().contains(department.toLowerCase());
-    }
-
-    /**
-     * Stops the Ranger plugin and releases resources.
-     */
-    public void cleanup() {
-        if (initialized) {
-            log.info("Cleaning up Ranger plugin");
-            initialized = false;
+            log.info("Ranger plugin initialised successfully (service={}, cacheDir={})",
+                    newPlugin.getConfig().get("ranger.plugin." + serviceType + ".policy.cache.dir"),
+                    serviceType);
+        } catch (Throwable t) {
+            this.initialized = false;
+            this.plugin = null;
+            log.error("Failed to initialise Ranger plugin; authorization will fall back to owner-only checks. "
+                    + "Error: {}", t.toString());
         }
     }
 
     public boolean isInitialized() {
-        return initialized;
+        return initialized && plugin != null;
+    }
+
+    /**
+     * Delegates to the embedded Ranger policy engine. The request is translated from Kirka's
+     * DTO to Ranger's {@link RangerAccessRequestImpl}; the two-level resource tree
+     * ({@code resourceType → resourceId}) matches the service-def shipped under
+     * {@code src/main/resources/ranger/ranger-servicedef-kirka.json}.
+     */
+    public boolean isAccessAllowed(RangerAccessRequest request) {
+        if (!isInitialized()) {
+            log.debug("Ranger plugin not initialised, denying access");
+            return false;
+        }
+        try {
+            RangerAccessResourceImpl resource = new RangerAccessResourceImpl();
+            // The service-def keys the policy tree by per-type resource names (experiment, run,
+            // model, gateway, scorer, prompt). The bucket name drives which resource-type slot
+            // the id goes into; unknown types default to "experiment" to stay safe (deny by
+            // default on unknown slots).
+            String type = request.getResourceType() != null ? request.getResourceType() : "experiment";
+            resource.setValue(type, request.getResourceId() != null ? request.getResourceId() : "*");
+
+            RangerAccessRequestImpl rangerRequest = new RangerAccessRequestImpl();
+            rangerRequest.setResource(resource);
+            rangerRequest.setUser(request.getUser());
+            if (request.getUserGroups() != null) {
+                rangerRequest.setUserGroups(request.getUserGroups());
+            }
+            rangerRequest.setAccessType(request.getAccessType() != null ? request.getAccessType() : "read");
+            rangerRequest.setClientIPAddress(request.getClientIpAddress());
+            rangerRequest.setAccessTime(new Date(
+                    request.getAccessTime() > 0 ? request.getAccessTime() : System.currentTimeMillis()));
+            rangerRequest.setAction(rangerRequest.getAccessType());
+
+            Map<String, Object> ctx = request.getContext();
+            if (ctx != null && !ctx.isEmpty()) {
+                rangerRequest.setRequestData(ctx.toString());
+            }
+
+            RangerAccessResult result = plugin.isAccessAllowed(rangerRequest);
+            boolean allowed = result != null && result.getIsAllowed();
+            if (log.isDebugEnabled()) {
+                log.debug("Ranger decision user={} type={} id={} access={} -> allowed={}",
+                        request.getUser(), type, resource.getValue(type),
+                        rangerRequest.getAccessType(), allowed);
+            }
+            return allowed;
+        } catch (Throwable t) {
+            log.error("Ranger evaluation failed, denying access", t);
+            return false;
+        }
+    }
+
+    /** Releases the embedded plugin (closes HTTP client, stops policy refresh thread). */
+    public void cleanup() {
+        if (plugin != null) {
+            try {
+                plugin.cleanup();
+            } catch (Throwable t) {
+                log.warn("Error while cleaning up Ranger plugin", t);
+            } finally {
+                plugin = null;
+                initialized = false;
+            }
+        }
     }
 }

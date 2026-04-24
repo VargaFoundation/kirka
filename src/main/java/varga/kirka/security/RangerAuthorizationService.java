@@ -44,15 +44,30 @@ public class RangerAuthorizationService implements AuthorizationService {
      */
     @jakarta.annotation.PostConstruct
     public void init() {
-        log.info("Initializing Ranger authorization service for service: {}", rangerServiceName);
+        log.info("Initializing Ranger authorization service for service={} admin={} cacheDir={}",
+                rangerServiceName, rangerAdminUrl, policyCacheDir);
         try {
-            rangerPlugin = new RangerPluginWrapper(rangerServiceName, rangerAdminUrl, policyCacheDir);
+            // Ranger reads its connection details from ranger-<appId>-security.xml on the
+            // classpath (src/main/resources/ranger/ranger-kirka-security.xml). The admin URL
+            // and cache directory recorded here are for logs only — the source of truth is
+            // the XML file.
+            rangerPlugin = new RangerPluginWrapper(rangerServiceName, rangerServiceName);
             rangerPlugin.init();
-            log.info("Ranger plugin initialized successfully");
+            if (!rangerPlugin.isInitialized()) {
+                log.warn("Ranger plugin failed to initialise; falling back to owner-only authorization");
+                rangerPlugin = null;
+            }
         } catch (Exception e) {
-            log.warn("Failed to initialize Ranger plugin, falling back to owner-based authorization only: {}", 
+            log.warn("Unexpected error while bootstrapping Ranger plugin; falling back to owner-only: {}",
                     e.getMessage());
             rangerPlugin = null;
+        }
+    }
+
+    @jakarta.annotation.PreDestroy
+    public void shutdown() {
+        if (rangerPlugin != null) {
+            rangerPlugin.cleanup();
         }
     }
 

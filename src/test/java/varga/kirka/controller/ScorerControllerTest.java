@@ -4,6 +4,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.annotation.Import;
+import varga.kirka.config.JacksonConfig;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -18,6 +20,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+@Import(JacksonConfig.class)
 @WebMvcTest(ScorerController.class)
 @AutoConfigureMockMvc(addFilters = false)
 public class ScorerControllerTest {
@@ -44,8 +47,8 @@ public class ScorerControllerTest {
                 .content("{\"experiment_id\": \"1\", \"name\": \"scorer1\", \"serialized_scorer\": \"{}\"}")
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.scorer.scorerId").value("s1"))
-                .andExpect(jsonPath("$.scorer.scorerName").value("scorer1"));
+                .andExpect(jsonPath("$.scorer.scorer_id").value("s1"))
+                .andExpect(jsonPath("$.scorer.scorer_name").value("scorer1"));
     }
 
     @Test
@@ -69,7 +72,7 @@ public class ScorerControllerTest {
                 .param("name", "scorer1")
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.scorer.scorerName").value("scorer1"));
+                .andExpect(jsonPath("$.scorer.scorer_name").value("scorer1"));
     }
 
     @Test

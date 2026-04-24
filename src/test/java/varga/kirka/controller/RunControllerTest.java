@@ -4,6 +4,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.annotation.Import;
+import varga.kirka.config.JacksonConfig;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -19,6 +21,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+@Import(JacksonConfig.class)
 @WebMvcTest(RunController.class)
 @AutoConfigureMockMvc(addFilters = false)
 public class RunControllerTest {
@@ -38,7 +41,7 @@ public class RunControllerTest {
                 .content("{\"experiment_id\": \"exp-1\", \"user_id\": \"user-1\"}")
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.run.info.runId").value("run-1"));
+                .andExpect(jsonPath("$.run.info.run_id").value("run-1"));
     }
 
     @Test
@@ -50,7 +53,7 @@ public class RunControllerTest {
                 .param("run_id", "run-1")
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.run.info.runId").value("run-1"));
+                .andExpect(jsonPath("$.run.info.run_id").value("run-1"));
     }
 
     @Test

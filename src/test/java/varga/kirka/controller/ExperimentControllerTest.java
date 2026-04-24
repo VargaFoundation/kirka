@@ -4,6 +4,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.annotation.Import;
+import varga.kirka.config.JacksonConfig;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -15,6 +17,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+@Import(JacksonConfig.class)
 @WebMvcTest(ExperimentController.class)
 @AutoConfigureMockMvc(addFilters = false)
 public class ExperimentControllerTest {
@@ -34,7 +37,7 @@ public class ExperimentControllerTest {
                 .param("experiment_id", "123")
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.experiment.experimentId").value("123"));
+                .andExpect(jsonPath("$.experiment.experiment_id").value("123"));
     }
 
     @Test

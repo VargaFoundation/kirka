@@ -133,63 +133,34 @@ class AuthorizationServiceTest {
     }
 
     @Test
-    void testRangerPluginWrapper_initialization() {
-        // Given
-        RangerPluginWrapper wrapper = new RangerPluginWrapper("kirka", "http://localhost:6080", "/tmp/cache");
+    void testRangerPluginWrapper_uninitializedDeniesByDefault() {
+        // When no init() has been called, the wrapper must refuse every request — the previous
+        // stub-based implementation granted admins/public-tagged resources silently, which made
+        // it impossible to tell real Ranger policies from stubbed heuristics. The real wrapper
+        // now defers entirely to RangerBasePlugin, so unconfigured instances deny.
+        RangerPluginWrapper wrapper = new RangerPluginWrapper("kirka", "kirka");
 
-        // When
-        wrapper.init();
-
-        // Then
-        assertTrue(wrapper.isInitialized());
+        assertFalse(wrapper.isInitialized(), "A wrapper without init() must not claim to be ready");
+        assertFalse(wrapper.isAccessAllowed(RangerAccessRequest.create(
+                "admin", "experiment", "exp-123", "read")));
+        assertFalse(wrapper.isAccessAllowed(RangerAccessRequest.createWithTags(
+                "someone", "experiment", "exp-123", "read", Map.of("public", "true"))));
     }
 
     @Test
-    void testRangerPluginWrapper_adminAccess() {
-        // Given
-        RangerPluginWrapper wrapper = new RangerPluginWrapper("kirka", "http://localhost:6080", "/tmp/cache");
-        wrapper.init();
-
-        RangerAccessRequest adminRequest = RangerAccessRequest.create("admin", "experiment", "exp-123", "read");
-
-        // When
-        boolean result = wrapper.isAccessAllowed(adminRequest);
-
-        // Then - admin should have access
-        assertTrue(result);
-    }
-
-    @Test
-    void testRangerPluginWrapper_publicTagAccess() {
-        // Given
-        RangerPluginWrapper wrapper = new RangerPluginWrapper("kirka", "http://localhost:6080", "/tmp/cache");
-        wrapper.init();
-
-        RangerAccessRequest request = RangerAccessRequest.createWithTags(
-                "regularuser", "experiment", "exp-123", "read", 
-                Map.of("public", "true"));
-
-        // When
-        boolean result = wrapper.isAccessAllowed(request);
-
-        // Then - public resources should be readable
-        assertTrue(result);
-    }
-
-    @Test
-    void testRangerPluginWrapper_deniesAccessWithoutPermission() {
-        // Given
-        RangerPluginWrapper wrapper = new RangerPluginWrapper("kirka", "http://localhost:6080", "/tmp/cache");
-        wrapper.init();
-
-        RangerAccessRequest request = RangerAccessRequest.create(
-                "regularuser", "experiment", "exp-123", "read");
-
-        // When
-        boolean result = wrapper.isAccessAllowed(request);
-
-        // Then - regular user without tags should be denied
-        assertFalse(result);
+    void testRangerPluginWrapper_initAttemptIsIdempotentOnFailure() {
+        // Without a reachable Ranger Admin the init call is expected to fail gracefully and
+        // leave the wrapper marked as uninitialised, so callers can fall back to owner-only.
+        RangerPluginWrapper wrapper = new RangerPluginWrapper("kirka", "kirka");
+        try {
+            wrapper.init();
+        } catch (Throwable t) {
+            // init() is documented to swallow failures; a thrown exception here is a regression.
+            fail("init() must not throw even when Ranger Admin is unreachable, got: " + t);
+        }
+        // Whatever the outcome, a follow-up cleanup must not throw either.
+        wrapper.cleanup();
+        assertFalse(wrapper.isInitialized());
     }
 
     @Test

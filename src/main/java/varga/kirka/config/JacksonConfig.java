@@ -4,38 +4,41 @@ import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.jackson.Jackson2ObjectMapperBuilderCustomizer;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
+import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
+import org.springframework.stereotype.Component;
 
 /**
  * JSON naming policy. MLFlow clients (Python/Java/R) expect snake_case on the wire, which is
- * also what the reference MLFlow REST API emits. Kirka historically returned camelCase for
- * model fields, so a transitional flag is exposed to let operators (and the legacy test suite)
- * keep the old serialization while we migrate call sites and controller tests.
+ * what the reference MLFlow REST API emits — that is the production default here. The
+ * {@code camel_case} value is kept as a short-term escape hatch for legacy consumers that
+ * were coded against Kirka's pre-stabilization output; remove the flag once those callers
+ * are gone.
  *
- * <p>Set {@code kirka.api.naming=snake_case} (the recommended value) to match MLFlow. The default
- * is {@code camel_case} until all existing JSONPath assertions in the controller tests have been
- * converted. Plan to remove this flag once the migration is complete.
+ * <p>This is a {@code @Component} (not a {@code @Configuration} with a {@code @Bean} method) so
+ * that Spring Boot's web test slice ({@code @WebMvcTest}) picks it up automatically — the slice
+ * does not import arbitrary configuration classes, but it does scan components on the classpath.
  */
 @Slf4j
-@Configuration
-public class JacksonConfig {
+@Component
+public class JacksonConfig implements Jackson2ObjectMapperBuilderCustomizer {
 
-    @Bean
-    public Jackson2ObjectMapperBuilderCustomizer namingStrategyCustomizer(
-            @Value("${kirka.api.naming:camel_case}") String namingStrategy) {
-        String strategy = namingStrategy != null ? namingStrategy.trim().toLowerCase() : "camel_case";
-        log.info("Kirka JSON naming strategy: {}", strategy);
-        return builder -> {
-            switch (strategy) {
-                case "snake_case" -> builder.propertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
-                case "camel_case" -> {
-                    // Jackson default (no transformation): keeps historical camelCase output
-                    // for Experiment/Run/RegisteredModel fields while the test suite migrates.
-                }
-                default ->
-                    log.warn("Unknown kirka.api.naming={}; keeping Jackson default naming", strategy);
+    private final String namingStrategy;
+
+    public JacksonConfig(@Value("${kirka.api.naming:snake_case}") String namingStrategy) {
+        this.namingStrategy = namingStrategy != null ? namingStrategy.trim().toLowerCase() : "snake_case";
+        log.info("Kirka JSON naming strategy: {}", this.namingStrategy);
+    }
+
+    @Override
+    public void customize(Jackson2ObjectMapperBuilder builder) {
+        switch (namingStrategy) {
+            case "snake_case" -> builder.propertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
+            case "camel_case" -> {
+                // Jackson default (no transformation): keeps historical camelCase output for
+                // legacy callers. Intentionally a no-op branch.
             }
-        };
+            default ->
+                log.warn("Unknown kirka.api.naming={}; keeping Jackson default naming", namingStrategy);
+        }
     }
 }
