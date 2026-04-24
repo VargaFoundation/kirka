@@ -127,7 +127,10 @@ public class RunServiceTest {
     @Test
     public void testSearchRuns() throws IOException {
         when(runRepository.searchRuns(anyList(), anyString(), anyString())).thenReturn(Collections.emptyList());
-        List<Run> results = runService.searchRuns(List.of("exp1"), "filter", "active");
+        // A well-formed filter is parsed through FilterParser; pass a valid MLFlow expression
+        // rather than the bare word "filter" the legacy test used.
+        List<Run> results = runService.searchRuns(List.of("exp1"),
+                "tags.env = 'prod'", "ACTIVE_ONLY");
         assertTrue(results.isEmpty());
     }
 

@@ -151,7 +151,6 @@ public class RunService {
     public List<Run> searchRuns(List<String> experimentIds, String filter, String runViewType) throws IOException {
         List<Run> runs = runRepository.searchRuns(experimentIds, filter, runViewType);
 
-        // Filter by read access
         runs = runs.stream()
                 .filter(run -> {
                     Map<String, String> tagsMap = getRunTagsMap(run);
@@ -171,7 +170,60 @@ public class RunService {
             }).collect(Collectors.toList());
         }
 
+        if (filter != null && !filter.isBlank()) {
+            var clauses = varga.kirka.search.FilterParser.parse(filter);
+            var evaluator = runFilterEvaluator();
+            runs = runs.stream()
+                    .filter(r -> evaluator.matches(r, clauses))
+                    .collect(Collectors.toList());
+        }
+
         return runs;
+    }
+
+    private static varga.kirka.search.FilterEvaluator<Run> runFilterEvaluator() {
+        return new varga.kirka.search.FilterEvaluator<>(
+                r -> mapFromPairs(r.getData() != null ? r.getData().getTags() : null,
+                        RunTag::getKey, RunTag::getValue),
+                r -> mapFromPairs(r.getData() != null ? r.getData().getParams() : null,
+                        Param::getKey, Param::getValue),
+                r -> mapFromMetrics(r.getData() != null ? r.getData().getMetrics() : null),
+                RunService::runAttribute);
+    }
+
+    private static <T> Map<String, String> mapFromPairs(
+            List<T> items,
+            java.util.function.Function<T, String> keyFn,
+            java.util.function.Function<T, String> valueFn) {
+        if (items == null || items.isEmpty()) return Map.of();
+        Map<String, String> out = new java.util.HashMap<>(items.size());
+        for (T item : items) out.put(keyFn.apply(item), valueFn.apply(item));
+        return out;
+    }
+
+    private static Map<String, Double> mapFromMetrics(List<Metric> metrics) {
+        if (metrics == null || metrics.isEmpty()) return Map.of();
+        Map<String, Double> out = new java.util.HashMap<>(metrics.size());
+        // Keep the latest-seen value per key, matching how the runs table stores only the most
+        // recent point in the CF_METRICS column family.
+        for (Metric m : metrics) out.put(m.getKey(), m.getValue());
+        return out;
+    }
+
+    private static Object runAttribute(Run run, String name) {
+        if (run == null || run.getInfo() == null) return null;
+        RunInfo info = run.getInfo();
+        return switch (name) {
+            case "run_id", "id", "run_uuid" -> info.getRunId();
+            case "experiment_id" -> info.getExperimentId();
+            case "user_id" -> info.getUserId();
+            case "status" -> info.getStatus() != null ? info.getStatus().name() : null;
+            case "start_time" -> info.getStartTime();
+            case "end_time" -> info.getEndTime();
+            case "artifact_uri" -> info.getArtifactUri();
+            case "lifecycle_stage" -> info.getLifecycleStage();
+            default -> null;
+        };
     }
 
     public List<Metric> getMetricHistory(String runId, String metricKey) throws IOException {

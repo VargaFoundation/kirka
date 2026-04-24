@@ -213,17 +213,26 @@ public class GatewayControllerTest {
     }
 
     @Test
-    public void testQueryRoute() throws Exception {
-        String requestJson = """
-                {
-                    "prompt": "Hello, how are you?"
-                }
-                """;
-        mockMvc.perform(post("/api/2.0/mlflow/gateway/query/test-route")
-                .content(requestJson)
+    public void testQueryRouteNotFound() throws Exception {
+        // When the route does not exist we now answer 404 (instead of a silent empty list).
+        when(gatewayRouteService.getRoute("missing")).thenReturn(null);
+        mockMvc.perform(post("/api/2.0/mlflow/gateway/query/missing")
+                .content("{\"prompt\": \"Hello\"}")
                 .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.candidates").isArray());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error_code").value("RESOURCE_DOES_NOT_EXIST"));
+    }
+
+    @Test
+    public void testQueryRouteNotImplemented() throws Exception {
+        // Proxy/LLM invocation is not implemented yet — respond with 501 rather than pretend.
+        when(gatewayRouteService.getRoute("test-route"))
+                .thenReturn(varga.kirka.model.GatewayRoute.builder().name("test-route").build());
+        mockMvc.perform(post("/api/2.0/mlflow/gateway/query/test-route")
+                .content("{\"prompt\": \"Hello\"}")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotImplemented())
+                .andExpect(jsonPath("$.error_code").value("ENDPOINT_NOT_IMPLEMENTED"));
     }
 
     @Test
@@ -243,6 +252,8 @@ public class GatewayControllerTest {
 
     @Test
     public void testInvocations() throws Exception {
+        // Kirka doesn't serve models — the endpoint now returns 501 with an actionable message
+        // telling clients to deploy on a dedicated serving runtime.
         String requestJson = """
                 {
                     "inputs": [[1, 2, 3]]
@@ -251,8 +262,8 @@ public class GatewayControllerTest {
         mockMvc.perform(post("/api/invocations")
                 .content(requestJson)
                 .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.predictions").isArray());
+                .andExpect(status().isNotImplemented())
+                .andExpect(jsonPath("$.error_code").value("ENDPOINT_NOT_IMPLEMENTED"));
     }
 
     @Test

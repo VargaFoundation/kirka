@@ -132,17 +132,23 @@ public class GatewayController {
     }
 
     @PostMapping("/2.0/mlflow/gateway/query/{name}")
-    public GatewayQueryResponse queryRoute(@PathVariable String name, @RequestBody Map<String, Object> request) {
+    public org.springframework.http.ResponseEntity<Map<String, Object>> queryRoute(@PathVariable String name,
+                                                                                    @RequestBody Map<String, Object> request) {
         log.info("Querying gateway route: {}", name);
         GatewayRoute route = gatewayRouteService.getRoute(name);
         if (route == null) {
-            log.warn("Gateway route not found: {}", name);
-            return new GatewayQueryResponse(List.of());
+            return org.springframework.http.ResponseEntity.status(org.springframework.http.HttpStatus.NOT_FOUND)
+                    .body(Map.of(
+                            "error_code", "RESOURCE_DOES_NOT_EXIST",
+                            "message", "Gateway route not found: " + name));
         }
-
-        // Query execution is provider-specific and is not implemented in this service yet.
-        // For now, return an empty candidate list while keeping a stable response schema.
-        return new GatewayQueryResponse(List.of());
+        // Upstream proxying (OpenAI/Anthropic/Bedrock/Ollama) is tracked as roadmap item B.1.4.
+        // Returning an empty candidate list silently was misleading — be explicit instead.
+        return org.springframework.http.ResponseEntity.status(org.springframework.http.HttpStatus.NOT_IMPLEMENTED)
+                .body(Map.of(
+                        "error_code", "ENDPOINT_NOT_IMPLEMENTED",
+                        "message", "Gateway query proxying is not implemented yet. Route '" + name
+                                + "' is registered but its upstream model is not invoked by Kirka."));
     }
 
     @PatchMapping("/2.0/mlflow/gateway/routes/{name}")
@@ -209,8 +215,16 @@ public class GatewayController {
     }
 
     @PostMapping("/invocations")
-    public Map<String, Object> invocations(@RequestBody Map<String, Object> request) {
-        return Map.of("predictions", List.of());
+    public org.springframework.http.ResponseEntity<Map<String, Object>> invocations(@RequestBody Map<String, Object> request) {
+        // Model serving is tracked as roadmap item B.4.6; historically Kirka returned an empty
+        // `predictions` list, which made broken deployments indistinguishable from "model
+        // returned no output". 501 makes the missing feature obvious to clients.
+        return org.springframework.http.ResponseEntity.status(org.springframework.http.HttpStatus.NOT_IMPLEMENTED)
+                .body(Map.of(
+                        "error_code", "ENDPOINT_NOT_IMPLEMENTED",
+                        "message", "Model serving is not implemented by Kirka. Deploy the model to a "
+                                + "dedicated serving runtime (e.g. mlflow models serve, Seldon, KServe) "
+                                + "and point your clients at that endpoint."));
     }
 
     @GetMapping("/ping")

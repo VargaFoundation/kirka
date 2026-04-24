@@ -3,10 +3,14 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import varga.kirka.model.*;
 import varga.kirka.repo.ExperimentRepository;
+import varga.kirka.search.FilterClause;
+import varga.kirka.search.FilterEvaluator;
+import varga.kirka.search.FilterParser;
 import varga.kirka.security.SecurityContextHelper;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -145,7 +149,6 @@ public class ExperimentService {
     public List<Experiment> searchExperiments(String viewType, Integer maxResults, String filter) throws IOException {
         List<Experiment> all = experimentRepository.listExperiments();
 
-        // Filter by read access first
         List<Experiment> accessible = all.stream()
             .filter(exp -> {
                 Map<String, String> tagsMap = securityContextHelper.tagsToMap(
@@ -154,32 +157,59 @@ public class ExperimentService {
             })
             .collect(Collectors.toList());
 
-        // Filter by lifecycle_stage
         List<Experiment> filtered = accessible.stream()
-            .filter(e -> {
-                if ("ACTIVE_ONLY".equalsIgnoreCase(viewType) || viewType == null) {
-                    return "active".equalsIgnoreCase(e.getLifecycleStage());
-                } else if ("DELETED_ONLY".equalsIgnoreCase(viewType)) {
-                    return "deleted".equalsIgnoreCase(e.getLifecycleStage());
-                }
-                return true; // ViewType.ALL
-            })
+            .filter(e -> matchesViewType(e, viewType))
             .collect(Collectors.toList());
 
-        // Simple name filtering (MLFlow supports a simple query language)
-        if (filter != null && !filter.isEmpty()) {
-            if (filter.contains("name =")) {
-                String targetName = filter.split("=")[1].trim().replace("'", "");
-                filtered = filtered.stream()
-                    .filter(e -> e.getName().equals(targetName))
+        if (filter != null && !filter.isBlank()) {
+            List<FilterClause> clauses = FilterParser.parse(filter);
+            FilterEvaluator<Experiment> evaluator = experimentFilterEvaluator();
+            filtered = filtered.stream()
+                    .filter(e -> evaluator.matches(e, clauses))
                     .collect(Collectors.toList());
-            }
         }
 
         if (maxResults != null && maxResults > 0 && filtered.size() > maxResults) {
             return filtered.subList(0, maxResults);
         }
-
         return filtered;
+    }
+
+    private static boolean matchesViewType(Experiment e, String viewType) {
+        if ("ACTIVE_ONLY".equalsIgnoreCase(viewType) || viewType == null) {
+            return "active".equalsIgnoreCase(e.getLifecycleStage());
+        }
+        if ("DELETED_ONLY".equalsIgnoreCase(viewType)) {
+            return "deleted".equalsIgnoreCase(e.getLifecycleStage());
+        }
+        return true; // ALL
+    }
+
+    private static FilterEvaluator<Experiment> experimentFilterEvaluator() {
+        return new FilterEvaluator<>(
+                ExperimentService::tagsAsMap,
+                e -> Map.of(),
+                e -> Map.of(),
+                ExperimentService::attribute);
+    }
+
+    private static Map<String, String> tagsAsMap(Experiment e) {
+        if (e.getTags() == null) return Map.of();
+        Map<String, String> m = new HashMap<>(e.getTags().size());
+        for (ExperimentTag t : e.getTags()) m.put(t.getKey(), t.getValue());
+        return m;
+    }
+
+    private static Object attribute(Experiment e, String name) {
+        return switch (name) {
+            case "experiment_id", "id" -> e.getExperimentId();
+            case "name" -> e.getName();
+            case "artifact_location" -> e.getArtifactLocation();
+            case "lifecycle_stage" -> e.getLifecycleStage();
+            case "creation_time" -> e.getCreationTime();
+            case "last_update_time" -> e.getLastUpdateTime();
+            case "owner", "user_id" -> e.getOwner();
+            default -> null;
+        };
     }
 }
