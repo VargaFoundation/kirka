@@ -113,7 +113,6 @@ public class ExperimentService {
 
     public List<Experiment> listExperiments() throws IOException {
         List<Experiment> experiments = experimentRepository.listExperiments();
-        // Filter experiments based on read access
         return experiments.stream()
                 .filter(exp -> {
                     Map<String, String> tagsMap = securityContextHelper.tagsToMap(
@@ -121,6 +120,26 @@ public class ExperimentService {
                     return securityContextHelper.canRead(RESOURCE_TYPE, exp.getExperimentId(), exp.getOwner(), tagsMap);
                 })
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Paginated experiment listing. Authorization filtering is applied per page, which means a
+     * particularly restrictive Ranger policy can produce short pages; callers should keep
+     * paging while {@code nextPageToken} is non-null rather than assume a full page.
+     */
+    public varga.kirka.repo.Page<Experiment> listExperimentsPaged(Integer maxResults, String pageToken) throws IOException {
+        int pageSize = varga.kirka.repo.PageToken.clampPageSize(maxResults);
+        varga.kirka.repo.PageToken token = varga.kirka.repo.PageToken.decode(pageToken);
+        varga.kirka.repo.Page<Experiment> raw = experimentRepository.listExperimentsPaged(pageSize, token);
+        if (raw == null) return new varga.kirka.repo.Page<>(List.of(), null);
+        List<Experiment> filtered = raw.items().stream()
+                .filter(exp -> {
+                    Map<String, String> tagsMap = securityContextHelper.tagsToMap(
+                            exp.getTags(), ExperimentTag::getKey, ExperimentTag::getValue);
+                    return securityContextHelper.canRead(RESOURCE_TYPE, exp.getExperimentId(), exp.getOwner(), tagsMap);
+                })
+                .collect(Collectors.toList());
+        return new varga.kirka.repo.Page<>(filtered, raw.nextPageToken());
     }
 
     public List<Experiment> searchExperiments(String viewType, Integer maxResults, String filter) throws IOException {

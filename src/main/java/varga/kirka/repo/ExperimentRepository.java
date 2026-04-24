@@ -105,15 +105,56 @@ public class ExperimentRepository {
         }
     }
 
-    public List<Experiment> listExperiments() throws IOException {
-        List<Experiment> experiments = new ArrayList<>();
-        try (Table table = connection.getTable(TableName.valueOf(TABLE_NAME));
-             ResultScanner scanner = table.getScanner(new Scan())) {
-            for (Result result : scanner) {
-                experiments.add(mapResultToExperiment(result));
+    /**
+     * Iterates over every entry of the name index and invokes the visitor with
+     * ({@code name}, {@code experimentId}). Used by the reconciler to find orphan entries.
+     * The caller is responsible for not mutating the table from inside the visitor.
+     */
+    public void forEachNameIndexEntry(java.util.function.BiConsumer<String, String> visitor) throws IOException {
+        try (Table indexTable = connection.getTable(TableName.valueOf(NAME_INDEX_TABLE_NAME));
+             ResultScanner scanner = indexTable.getScanner(new Scan().setCaching(100))) {
+            for (Result r : scanner) {
+                byte[] idBytes = r.getValue(CF_INFO, COL_EXPERIMENT_ID);
+                if (idBytes == null) continue;
+                visitor.accept(Bytes.toString(r.getRow()), Bytes.toString(idBytes));
             }
         }
-        return experiments;
+    }
+
+    /** Deletes an entry from the name index. Used by the reconciler when an orphan is found. */
+    public void deleteNameIndexEntry(String name) throws IOException {
+        try (Table indexTable = connection.getTable(TableName.valueOf(NAME_INDEX_TABLE_NAME))) {
+            indexTable.delete(new Delete(Bytes.toBytes(name)));
+        }
+    }
+
+    public List<Experiment> listExperiments() throws IOException {
+        return listExperimentsPaged(Integer.MAX_VALUE, null).items();
+    }
+
+    /**
+     * Scans the experiments table and returns a bounded slice. Pagination is cursor-based:
+     * {@code pageToken} resumes where the previous call left off, and the returned
+     * {@code nextPageToken} is {@code null} when the last row has been reached.
+     */
+    public Page<Experiment> listExperimentsPaged(int maxResults, PageToken pageToken) throws IOException {
+        List<Experiment> experiments = new ArrayList<>();
+        byte[] lastRow = null;
+        Scan scan = new Scan();
+        scan.setCaching(Math.min(maxResults, 500));
+        if (pageToken != null) {
+            scan.withStartRow(pageToken.nextStartRow(), true);
+        }
+        try (Table table = connection.getTable(TableName.valueOf(TABLE_NAME));
+             ResultScanner scanner = table.getScanner(scan)) {
+            for (Result result : scanner) {
+                if (experiments.size() >= maxResults) break;
+                experiments.add(mapResultToExperiment(result));
+                lastRow = result.getRow();
+            }
+        }
+        String next = (experiments.size() == maxResults && lastRow != null) ? PageToken.of(lastRow).encode() : null;
+        return new Page<>(experiments, next);
     }
 
     public Experiment getExperimentByName(String name) throws IOException {

@@ -1,8 +1,10 @@
-replicaCount: 1
+replicaCount: 2
 
 image:
   repository: ghcr.io/varga-foundation/kirka
-  tag: latest
+  # Tag defaults to the chart's appVersion so rollbacks are reproducible.
+  # Override with --set image.tag=<explicit-version> to pin.
+  tag: ""
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
@@ -25,6 +27,24 @@ resources:
     memory: "512Mi"
     cpu: "500m"
 
+# Pod-level security context (runs as a non-root system user baked into the image)
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+terminationGracePeriodSeconds: 60
+
 nodeSelector: {}
 tolerations: []
 affinity: {}
@@ -38,14 +58,35 @@ config:
   # Security
   securityEnabled: "false"
   securityAuthType: "basic"
-  securityAdminUsers: "admin"
+  # Comma-separated list of admin usernames (only granted ROLE_ADMIN *after* successful auth)
+  securityAdminUsers: ""
+  # Path to the bcrypt htpasswd file, mounted from a Secret below.
+  securityUsersFile: "/etc/kirka/users.htpasswd"
+  # CIDRs of trusted reverse proxies allowed to send X-Forwarded-User.
+  securityTrustedProxies: ""
+  # Wire-format for the MLFlow API. Use snake_case to interoperate with the official clients.
+  kirkaApiNaming: "snake_case"
   # Kerberos
   kerberosEnabled: "false"
   kerberosPrincipal: ""
-  kerberosKeytab: ""
+  kerberosKeytab: "/etc/kirka/kerberos.keytab"
   # Ranger
   rangerServiceName: "kirka"
-  rangerAdminUrl: "http://localhost:6080"
+  rangerAdminUrl: ""
+
+# Optional Secret containing the bcrypt htpasswd file. Leave `create: false` when mounting
+# an externally-managed secret via `existingSecret`.
+basicAuth:
+  create: false
+  existingSecret: ""
+  # htpasswd content (one "user:$2a$..." per line). Will be placed in a Kubernetes Secret
+  # named "{fullname}-basic-auth" and mounted at /etc/kirka/users.htpasswd.
+  htpasswd: ""
+
+# Optional Kerberos keytab as a Secret (recommended for clusters with krb5).
+kerberos:
+  existingSecret: ""   # name of a secret with a `kerberos.keytab` entry
+  mountPath: "/etc/kirka"
 
 livenessProbe:
   httpGet:
@@ -53,6 +94,7 @@ livenessProbe:
     port: http
   initialDelaySeconds: 30
   periodSeconds: 10
+  failureThreshold: 6
 
 readinessProbe:
   httpGet:
@@ -60,3 +102,49 @@ readinessProbe:
     port: http
   initialDelaySeconds: 15
   periodSeconds: 5
+  failureThreshold: 3
+
+# PodDisruptionBudget keeps at least one replica available during voluntary disruptions.
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# HorizontalPodAutoscaler based on CPU. Override `targetCPUUtilizationPercentage` for tuning.
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+
+# Ingress (optional — defaults to disabled; the chart produces a ClusterIP Service only).
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: kirka.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+# NetworkPolicy: egress is allowed to the backend services listed here, everything else blocked.
+networkPolicy:
+  enabled: false
+  ingress:
+    - from: []
+  egress:
+    # Allow DNS to kube-dns (cluster default) and traffic to the backend ports below.
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+# Prometheus Operator ServiceMonitor (optional).
+serviceMonitor:
+  enabled: false
+  interval: 30s
+  path: /actuator/prometheus
+  labels: {}

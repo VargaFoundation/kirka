@@ -12,6 +12,9 @@ data:
   SECURITY_ENABLED: {{ .Values.config.securityEnabled | quote }}
   SECURITY_AUTHENTICATION_TYPE: {{ .Values.config.securityAuthType | quote }}
   SECURITY_ADMIN_USERS: {{ .Values.config.securityAdminUsers | quote }}
+  SECURITY_USERS_FILE: {{ .Values.config.securityUsersFile | quote }}
+  SECURITY_TRUSTED_PROXIES: {{ .Values.config.securityTrustedProxies | quote }}
+  KIRKA_API_NAMING: {{ .Values.config.kirkaApiNaming | quote }}
   SECURITY_KERBEROS_ENABLED: {{ .Values.config.kerberosEnabled | quote }}
   {{- if .Values.config.kerberosPrincipal }}
   SECURITY_KERBEROS_PRINCIPAL: {{ .Values.config.kerberosPrincipal | quote }}

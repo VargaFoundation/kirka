@@ -2,5 +2,10 @@ target/
 .git/
 .github/
 .idea/
+.claude/
 helm/
+knox/
 *.md
+*.log
+Dockerfile
+.dockerignore

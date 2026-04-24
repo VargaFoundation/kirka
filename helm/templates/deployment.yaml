@@ -6,7 +6,9 @@ metadata:
   labels:
     {{- include "kirka.labels" . | nindent 4 }}
 spec:
+  {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "kirka.selectorLabels" . | nindent 6 }}
@@ -14,16 +16,28 @@ spec:
     metadata:
       labels:
         {{- include "kirka.selectorLabels" . | nindent 8 }}
+      annotations:
+        # Trigger a rolling restart when the ConfigMap changes.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ include "kirka.serviceAccountName" . }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: {{ .Chart.Name }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: "{{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           ports:
             - name: http
               containerPort: 8080
@@ -31,6 +45,31 @@ spec:
           envFrom:
             - configMapRef:
                 name: {{ include "kirka.fullname" . }}-config
+          {{- if or .Values.basicAuth.existingSecret .Values.basicAuth.create .Values.kerberos.existingSecret }}
+          volumeMounts:
+            {{- if or .Values.basicAuth.existingSecret .Values.basicAuth.create }}
+            - name: basic-auth
+              mountPath: /etc/kirka/users.htpasswd
+              subPath: users.htpasswd
+              readOnly: true
+            {{- end }}
+            {{- if .Values.kerberos.existingSecret }}
+            - name: kerberos-keytab
+              mountPath: {{ .Values.kerberos.mountPath }}
+              readOnly: true
+            {{- end }}
+            - name: tmp
+              mountPath: /tmp
+          {{- else }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          {{- end }}
+          lifecycle:
+            preStop:
+              # Give service meshes + load balancers time to drain before the graceful shutdown starts.
+              exec:
+                command: ["sh", "-c", "sleep 10"]
           {{- with .Values.livenessProbe }}
           livenessProbe:
             {{- toYaml . | nindent 12 }}
@@ -41,6 +80,19 @@ spec:
           {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- if or .Values.basicAuth.existingSecret .Values.basicAuth.create }}
+        - name: basic-auth
+          secret:
+            secretName: {{ default (printf "%s-basic-auth" (include "kirka.fullname" .)) .Values.basicAuth.existingSecret }}
+        {{- end }}
+        {{- if .Values.kerberos.existingSecret }}
+        - name: kerberos-keytab
+          secret:
+            secretName: {{ .Values.kerberos.existingSecret }}
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

@@ -1,4 +1,7 @@
 package varga.kirka.controller;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import varga.kirka.model.*;
@@ -21,8 +24,8 @@ public class RunController {
 
     @lombok.Data
     public static class CreateRunRequest {
-        private String experiment_id;
-        private String user_id;
+        @NotBlank private String experiment_id;
+        @Size(max = 256) private String user_id;
         private Long start_time;
         private List<Tag> tags;
 
@@ -47,24 +50,24 @@ public class RunController {
 
     @lombok.Data
     public static class UpdateRunRequest {
-        private String run_id;
+        @NotBlank private String run_id;
         private String status;
         private Long end_time;
     }
 
     @lombok.Data
     public static class DeleteRunRequest {
-        private String run_id;
+        @NotBlank private String run_id;
     }
 
     @lombok.Data
     public static class RestoreRunRequest {
-        private String run_id;
+        @NotBlank private String run_id;
     }
 
     @lombok.Data
     public static class LogBatchRequest {
-        private String run_id;
+        @NotBlank private String run_id;
         private List<MetricData> metrics;
         private List<ParamData> params;
         private List<TagData> tags;
@@ -92,15 +95,15 @@ public class RunController {
 
     @lombok.Data
     public static class SetTagRequest {
-        private String run_id;
-        private String key;
-        private String value;
+        @NotBlank private String run_id;
+        @NotBlank @Size(max = 250) private String key;
+        @Size(max = 5000) private String value;
     }
 
     @lombok.Data
     public static class DeleteTagRequest {
-        private String run_id;
-        private String key;
+        @NotBlank private String run_id;
+        @NotBlank @Size(max = 250) private String key;
     }
 
     @lombok.Data
@@ -112,15 +115,15 @@ public class RunController {
 
     @lombok.Data
     public static class LogParameterRequest {
-        private String run_id;
-        private String key;
-        private String value;
+        @NotBlank private String run_id;
+        @NotBlank @Size(max = 250) private String key;
+        @Size(max = 6000) private String value;
     }
 
     @lombok.Data
     public static class LogMetricRequest {
-        private String run_id;
-        private String key;
+        @NotBlank private String run_id;
+        @NotBlank @Size(max = 250) private String key;
         private Double value;
         private Long timestamp;
         private Long step;
@@ -133,7 +136,7 @@ public class RunController {
     }
 
     @PostMapping("/create")
-    public RunResponse createRun(@RequestBody CreateRunRequest request) throws IOException {
+    public RunResponse createRun(@Valid @RequestBody CreateRunRequest request) throws IOException {
         String experimentId = request.getExperiment_id();
         log.info("REST request to create run for experiment: {}", experimentId);
         String userId = request.getUser_id();
@@ -156,7 +159,7 @@ public class RunController {
     }
 
     @PostMapping("/update")
-    public Map<String, Object> updateRun(@RequestBody UpdateRunRequest request) throws IOException {
+    public Map<String, Object> updateRun(@Valid @RequestBody UpdateRunRequest request) throws IOException {
         String runId = request.getRun_id();
         String status = request.getStatus();
         long endTime = request.getEnd_time() != null ? request.getEnd_time() : 0L;
@@ -165,19 +168,19 @@ public class RunController {
     }
 
     @PostMapping("/delete")
-    public Map<String, Object> deleteRun(@RequestBody DeleteRunRequest request) throws IOException {
+    public Map<String, Object> deleteRun(@Valid @RequestBody DeleteRunRequest request) throws IOException {
         runService.deleteRun(request.getRun_id());
         return Map.of();
     }
 
     @PostMapping("/restore")
-    public Map<String, Object> restoreRun(@RequestBody RestoreRunRequest request) throws IOException {
+    public Map<String, Object> restoreRun(@Valid @RequestBody RestoreRunRequest request) throws IOException {
         runService.restoreRun(request.getRun_id());
         return Map.of();
     }
 
     @PostMapping("/log-batch")
-    public Map<String, Object> logBatch(@RequestBody LogBatchRequest request) throws IOException {
+    public Map<String, Object> logBatch(@Valid @RequestBody LogBatchRequest request) throws IOException {
         String runId = request.getRun_id();
         
         List<Map<String, Object>> metrics = new ArrayList<>();
@@ -211,13 +214,13 @@ public class RunController {
     }
 
     @PostMapping("/set-tag")
-    public Map<String, Object> setTag(@RequestBody SetTagRequest request) throws IOException {
+    public Map<String, Object> setTag(@Valid @RequestBody SetTagRequest request) throws IOException {
         runService.setTag(request.getRun_id(), request.getKey(), request.getValue());
         return Map.of();
     }
 
     @PostMapping("/delete-tag")
-    public Map<String, Object> deleteTag(@RequestBody DeleteTagRequest request) throws IOException {
+    public Map<String, Object> deleteTag(@Valid @RequestBody DeleteTagRequest request) throws IOException {
         runService.deleteTag(request.getRun_id(), request.getKey());
         return Map.of();
     }
@@ -236,13 +239,13 @@ public class RunController {
     }
 
     @PostMapping("/log-parameter")
-    public Map<String, Object> logParameter(@RequestBody LogParameterRequest request) throws IOException {
+    public Map<String, Object> logParameter(@Valid @RequestBody LogParameterRequest request) throws IOException {
         runService.logParameter(request.getRun_id(), request.getKey(), request.getValue());
         return Map.of();
     }
 
     @PostMapping("/log-metric")
-    public Map<String, Object> logMetric(@RequestBody LogMetricRequest request) throws IOException {
+    public Map<String, Object> logMetric(@Valid @RequestBody LogMetricRequest request) throws IOException {
         String runId = request.getRun_id();
         List<Map<String, Object>> metrics = List.of(Map.of(
             "key", request.getKey(),
@@ -251,6 +254,30 @@ public class RunController {
             "step", request.getStep() != null ? request.getStep() : 0L
         ));
         runService.logBatch(runId, metrics, null, null);
+        return Map.of();
+    }
+
+    @lombok.Data
+    public static class LogInputsRequest {
+        private String run_id;
+        private List<Map<String, Object>> datasets;
+    }
+
+    @PostMapping("/log-inputs")
+    public Map<String, Object> logInputs(@RequestBody LogInputsRequest request) throws IOException {
+        runService.logInputs(request.getRun_id(), request.getDatasets());
+        return Map.of();
+    }
+
+    @lombok.Data
+    public static class LogModelRequest {
+        private String run_id;
+        private String model_json;
+    }
+
+    @PostMapping("/log-model")
+    public Map<String, Object> logModel(@RequestBody LogModelRequest request) throws IOException {
+        runService.logModel(request.getRun_id(), request.getModel_json());
         return Map.of();
     }
 }

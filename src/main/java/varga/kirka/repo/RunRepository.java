@@ -157,6 +157,43 @@ public class RunRepository {
         }
     }
 
+    private static final byte[] CF_INPUTS = Bytes.toBytes("inputs");
+    private static final byte[] COL_LOGGED_MODELS = Bytes.toBytes("mlflow.log-model.history");
+
+    /**
+     * Records dataset inputs for a run (MLFlow 2.4+ log-inputs). Each serialized dataset is
+     * stored as a JSON blob keyed by a short digest so re-logging the same dataset is idempotent.
+     */
+    public void logInputs(String runId, List<String> serializedInputs) throws IOException {
+        if (serializedInputs == null || serializedInputs.isEmpty()) return;
+        try (Table table = connection.getTable(TableName.valueOf(TABLE_NAME))) {
+            Put put = new Put(Bytes.toBytes(runId));
+            for (String json : serializedInputs) {
+                String digest = Integer.toHexString(json.hashCode());
+                put.addColumn(CF_INPUTS, Bytes.toBytes(digest), Bytes.toBytes(json));
+            }
+            table.put(put);
+        }
+    }
+
+    /**
+     * Appends a logged-model entry for a run (MLFlow log_model). Multiple models per run are
+     * allowed; history is kept as a newline-separated blob so callers append without re-reading.
+     */
+    public void logModel(String runId, String modelJson) throws IOException {
+        if (modelJson == null || modelJson.isBlank()) return;
+        try (Table table = connection.getTable(TableName.valueOf(TABLE_NAME))) {
+            Get get = new Get(Bytes.toBytes(runId));
+            get.addColumn(CF_INFO, COL_LOGGED_MODELS);
+            Result existing = table.get(get);
+            String prev = HBaseResults.getStringOrDefault(existing, CF_INFO, COL_LOGGED_MODELS, "");
+            String next = prev.isEmpty() ? modelJson : prev + "\n" + modelJson;
+            Put put = new Put(Bytes.toBytes(runId));
+            put.addColumn(CF_INFO, COL_LOGGED_MODELS, Bytes.toBytes(next));
+            table.put(put);
+        }
+    }
+
     public List<Run> searchRuns(List<String> experimentIds, String filter, String runViewType) throws IOException {
         List<Run> runs = new ArrayList<>();
         try (Table table = connection.getTable(TableName.valueOf(TABLE_NAME))) {

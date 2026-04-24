@@ -52,6 +52,21 @@ public class ModelRegistryService {
                 .collect(Collectors.toList());
     }
 
+    /** Paginated registered-model listing with Ranger read filtering applied per page. */
+    public varga.kirka.repo.Page<RegisteredModel> listRegisteredModelsPaged(Integer maxResults, String pageToken) throws IOException {
+        int pageSize = varga.kirka.repo.PageToken.clampPageSize(maxResults);
+        varga.kirka.repo.PageToken token = varga.kirka.repo.PageToken.decode(pageToken);
+        varga.kirka.repo.Page<RegisteredModel> raw = modelRegistryRepository.listRegisteredModelsPaged(pageSize, token);
+        if (raw == null) return new varga.kirka.repo.Page<>(List.of(), null);
+        List<RegisteredModel> filtered = raw.items().stream()
+                .filter(model -> {
+                    Map<String, String> tagsMap = getModelTagsMap(model);
+                    return securityContextHelper.canRead(RESOURCE_TYPE, model.getName(), model.getUserId(), tagsMap);
+                })
+                .collect(Collectors.toList());
+        return new varga.kirka.repo.Page<>(filtered, raw.nextPageToken());
+    }
+
     public ModelVersion createModelVersion(String name, String source, String runId) throws IOException {
         log.info("Creating model version for: {}, source: {}, runId: {}", name, source, runId);
         RegisteredModel model = modelRegistryRepository.getRegisteredModel(name);
@@ -213,6 +228,121 @@ public class ModelRegistryService {
         Map<String, String> tagsMap = getModelTagsMap(model);
         securityContextHelper.checkWriteAccess(RESOURCE_TYPE, name, model.getUserId(), tagsMap);
         modelRegistryRepository.deleteModelVersionTag(name, version, key);
+    }
+
+    /** Sets an alias on a registered model. The target version must exist. */
+    public void setAlias(String name, String alias, String version) throws IOException {
+        if (alias == null || alias.isBlank()) {
+            throw new IllegalArgumentException("Alias must not be empty");
+        }
+        RegisteredModel model = modelRegistryRepository.getRegisteredModel(name);
+        if (model == null) {
+            throw new ResourceNotFoundException("RegisteredModel", name);
+        }
+        Map<String, String> tagsMap = getModelTagsMap(model);
+        securityContextHelper.checkWriteAccess(RESOURCE_TYPE, name, model.getUserId(), tagsMap);
+
+        ModelVersion target = modelRegistryRepository.getModelVersion(name, version);
+        if (target == null) {
+            throw new ResourceNotFoundException("ModelVersion", name + "/" + version);
+        }
+        modelRegistryRepository.setAlias(name, alias, version);
+    }
+
+    public void deleteAlias(String name, String alias) throws IOException {
+        RegisteredModel model = modelRegistryRepository.getRegisteredModel(name);
+        if (model == null) {
+            throw new ResourceNotFoundException("RegisteredModel", name);
+        }
+        Map<String, String> tagsMap = getModelTagsMap(model);
+        securityContextHelper.checkWriteAccess(RESOURCE_TYPE, name, model.getUserId(), tagsMap);
+        modelRegistryRepository.deleteAlias(name, alias);
+    }
+
+    /** Resolves an alias to its pinned model version. */
+    public ModelVersion getModelVersionByAlias(String name, String alias) throws IOException {
+        RegisteredModel model = modelRegistryRepository.getRegisteredModel(name);
+        if (model == null) {
+            throw new ResourceNotFoundException("RegisteredModel", name);
+        }
+        Map<String, String> tagsMap = getModelTagsMap(model);
+        securityContextHelper.checkReadAccess(RESOURCE_TYPE, name, model.getUserId(), tagsMap);
+        String version = modelRegistryRepository.getAliasedVersion(name, alias);
+        if (version == null) {
+            throw new ResourceNotFoundException("Alias", name + "@" + alias);
+        }
+        ModelVersion mv = modelRegistryRepository.getModelVersion(name, version);
+        if (mv == null) {
+            throw new ResourceNotFoundException("ModelVersion", name + "/" + version);
+        }
+        return mv;
+    }
+
+    /** Renames a registered model. Fails if a model with {@code newName} already exists. */
+    public void renameRegisteredModel(String oldName, String newName) throws IOException {
+        if (newName == null || newName.isBlank()) {
+            throw new IllegalArgumentException("new_name must not be empty");
+        }
+        RegisteredModel model = modelRegistryRepository.getRegisteredModel(oldName);
+        if (model == null) {
+            throw new ResourceNotFoundException("RegisteredModel", oldName);
+        }
+        Map<String, String> tagsMap = getModelTagsMap(model);
+        securityContextHelper.checkWriteAccess(RESOURCE_TYPE, oldName, model.getUserId(), tagsMap);
+        modelRegistryRepository.renameRegisteredModel(oldName, newName);
+    }
+
+    /**
+     * Returns the URI at which the artifact of a given model version can be downloaded. For
+     * models registered from a run, this is the run's artifact location; otherwise it falls
+     * back to the raw {@code source} recorded at registration time.
+     */
+    public String getModelVersionDownloadUri(String name, String version) throws IOException {
+        ModelVersion mv = getModelVersion(name, version);
+        // getModelVersion already raised ResourceNotFoundException if absent and enforced authz.
+        String source = mv.getSource();
+        if (source == null || source.isBlank()) {
+            throw new ResourceNotFoundException("ModelVersionSource", name + "/" + version);
+        }
+        return source;
+    }
+
+    /** Server-side search on model versions, with optional name and stage filters. */
+    public List<ModelVersion> searchModelVersions(String filter, int maxResults) throws IOException {
+        String modelName = null;
+        String stageFilter = null;
+        if (filter != null && !filter.isBlank()) {
+            // Very small DSL: "name = 'X'" and/or "current_stage = 'Production'".
+            for (String clause : filter.split(" and ")) {
+                String trimmed = clause.trim();
+                if (trimmed.startsWith("name")) {
+                    modelName = extractQuoted(trimmed);
+                } else if (trimmed.startsWith("current_stage")) {
+                    stageFilter = extractQuoted(trimmed);
+                }
+            }
+        }
+        int cap = Math.max(1, Math.min(maxResults <= 0 ? 1000 : maxResults, 10000));
+        List<ModelVersion> versions = modelRegistryRepository.searchModelVersions(modelName, stageFilter, cap);
+
+        // Authorization filter: we can only return versions whose parent model is visible.
+        List<ModelVersion> accessible = new java.util.ArrayList<>(versions.size());
+        for (ModelVersion mv : versions) {
+            RegisteredModel parent = modelRegistryRepository.getRegisteredModel(mv.getName());
+            if (parent == null) continue;
+            Map<String, String> tagsMap = getModelTagsMap(parent);
+            if (securityContextHelper.canRead(RESOURCE_TYPE, parent.getName(), parent.getUserId(), tagsMap)) {
+                accessible.add(mv);
+            }
+        }
+        return accessible;
+    }
+
+    private static String extractQuoted(String clause) {
+        int first = clause.indexOf('\'');
+        int last = clause.lastIndexOf('\'');
+        if (first < 0 || last <= first) return null;
+        return clause.substring(first + 1, last);
     }
 
     private Map<String, String> getModelTagsMap(RegisteredModel model) {

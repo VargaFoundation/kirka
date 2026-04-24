@@ -205,6 +205,45 @@ public class RunService {
     }
 
     /**
+     * Logs dataset inputs attached to a run (MLFlow 2.4+ log-inputs).
+     * The datasets argument is the raw map decoded from the JSON request body.
+     */
+    public void logInputs(String runId, List<Map<String, Object>> datasets) throws IOException {
+        Run run = runRepository.getRun(runId);
+        if (run == null) {
+            throw new ResourceNotFoundException("Run", runId);
+        }
+        Map<String, String> tagsMap = getRunTagsMap(run);
+        securityContextHelper.checkWriteAccess(RESOURCE_TYPE, runId, run.getInfo().getUserId(), tagsMap);
+
+        if (datasets == null || datasets.isEmpty()) return;
+        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        List<String> serialized = new java.util.ArrayList<>(datasets.size());
+        for (Map<String, Object> d : datasets) {
+            try {
+                serialized.add(mapper.writeValueAsString(d));
+            } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+                throw new IOException("Failed to serialize dataset input", e);
+            }
+        }
+        runRepository.logInputs(runId, serialized);
+    }
+
+    /** Logs a model's metadata JSON against a run (MLFlow log_model). */
+    public void logModel(String runId, String modelJson) throws IOException {
+        Run run = runRepository.getRun(runId);
+        if (run == null) {
+            throw new ResourceNotFoundException("Run", runId);
+        }
+        Map<String, String> tagsMap = getRunTagsMap(run);
+        securityContextHelper.checkWriteAccess(RESOURCE_TYPE, runId, run.getInfo().getUserId(), tagsMap);
+        if (modelJson == null || modelJson.isBlank()) {
+            throw new IllegalArgumentException("model_json must not be empty");
+        }
+        runRepository.logModel(runId, modelJson);
+    }
+
+    /**
      * Extracts tags from a Run as a Map for authorization checks.
      */
     private Map<String, String> getRunTagsMap(Run run) {

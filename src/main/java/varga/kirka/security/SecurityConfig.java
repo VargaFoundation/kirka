@@ -39,6 +39,9 @@ public class SecurityConfig {
                 .requestMatchers("/actuator/health", "/actuator/health/**",
                                  "/actuator/info", "/actuator/prometheus",
                                  "/ping", "/version").permitAll()
+                // OpenAPI spec + Swagger UI are API metadata, safe to expose
+                .requestMatchers("/v3/api-docs", "/v3/api-docs/**",
+                                 "/swagger-ui.html", "/swagger-ui/**").permitAll()
                 // env/loggers/beans and any other actuator endpoint: admin only
                 .requestMatchers("/actuator/**").hasRole("ADMIN")
                 // All other endpoints require authentication
