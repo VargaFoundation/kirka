@@ -74,6 +74,49 @@ public class RunRepository {
         }
     }
 
+    /**
+     * Purges the run row and every point in {@code mlflow_metric_history} associated with it.
+     * Used by the GDPR hard-delete flow, never called by the regular {@code /delete} endpoint.
+     */
+    public void hardDeleteRun(String runId) throws IOException {
+        try (Table runsTable = connection.getTable(TableName.valueOf(TABLE_NAME));
+             Table historyTable = connection.getTable(TableName.valueOf(METRIC_HISTORY_TABLE))) {
+            runsTable.delete(new Delete(Bytes.toBytes(runId)));
+
+            Scan scan = new Scan();
+            scan.setRowPrefixFilter(Bytes.toBytes(runId + "_"));
+            scan.setCaching(500);
+            List<Delete> batch = new ArrayList<>();
+            try (ResultScanner scanner = historyTable.getScanner(scan)) {
+                for (Result r : scanner) {
+                    batch.add(new Delete(r.getRow()));
+                    if (batch.size() >= 500) {
+                        historyTable.delete(batch);
+                        batch.clear();
+                    }
+                }
+            }
+            if (!batch.isEmpty()) historyTable.delete(batch);
+        }
+    }
+
+    /** Returns every run id that belongs to {@code experimentId}. Used for cascading deletes. */
+    public List<String> findRunIdsForExperiment(String experimentId) throws IOException {
+        List<String> ids = new ArrayList<>();
+        try (Table table = connection.getTable(TableName.valueOf(TABLE_NAME))) {
+            Scan scan = new Scan();
+            scan.setCaching(500);
+            scan.setFilter(new org.apache.hadoop.hbase.filter.SingleColumnValueFilter(
+                    CF_INFO, COL_EXPERIMENT_ID,
+                    org.apache.hadoop.hbase.filter.CompareFilter.CompareOp.EQUAL,
+                    Bytes.toBytes(experimentId)));
+            try (ResultScanner scanner = table.getScanner(scan)) {
+                for (Result r : scanner) ids.add(Bytes.toString(r.getRow()));
+            }
+        }
+        return ids;
+    }
+
     public void restoreRun(String runId) throws IOException {
         try (Table table = connection.getTable(TableName.valueOf(TABLE_NAME))) {
             Put put = new Put(Bytes.toBytes(runId));

@@ -128,6 +128,23 @@ public class ExperimentRepository {
         }
     }
 
+    /**
+     * Purges the primary row and the name-index entry for an experiment. Unlike
+     * {@link #deleteExperiment(String)}, which sets the lifecycle_stage to "deleted" for
+     * soft-delete semantics, this one removes every trace of the experiment — used by the
+     * GDPR hard-delete flow. Cascading through child runs is the caller's responsibility.
+     */
+    public void hardDeleteExperiment(String experimentId) throws IOException {
+        Experiment experiment = getExperiment(experimentId);
+        try (Table table = connection.getTable(TableName.valueOf(TABLE_NAME));
+             Table indexTable = connection.getTable(TableName.valueOf(NAME_INDEX_TABLE_NAME))) {
+            table.delete(new Delete(Bytes.toBytes(experimentId)));
+            if (experiment != null && experiment.getName() != null) {
+                indexTable.delete(new Delete(Bytes.toBytes(experiment.getName())));
+            }
+        }
+    }
+
     public List<Experiment> listExperiments() throws IOException {
         return listExperimentsPaged(Integer.MAX_VALUE, null).items();
     }
