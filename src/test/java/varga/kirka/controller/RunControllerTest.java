@@ -2,6 +2,7 @@ package varga.kirka.controller;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
@@ -19,6 +20,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(RunController.class)
+@AutoConfigureMockMvc(addFilters = false)
 public class RunControllerTest {
 
     @Autowired
@@ -119,7 +121,7 @@ public class RunControllerTest {
     public void testGetMetricHistory() throws Exception {
         when(runService.getMetricHistory("run-1", "accuracy")).thenReturn(java.util.List.of());
 
-        mockMvc.perform(get("/api/2.0/mlflow/runs/metric-history")
+        mockMvc.perform(get("/api/2.0/mlflow/runs/get-metric-history")
                 .param("run_id", "run-1")
                 .param("metric_key", "accuracy")
                 .contentType(MediaType.APPLICATION_JSON))

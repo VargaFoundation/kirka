@@ -1,45 +1,63 @@
 package varga.kirka.service;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import varga.kirka.model.ModelVersion;
 import varga.kirka.model.RegisteredModel;
 import varga.kirka.repo.ModelRegistryRepository;
+import varga.kirka.security.SecurityContextHelper;
 
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 public class ModelRegistryServiceTest {
 
     @Mock
     private ModelRegistryRepository modelRegistryRepository;
 
+    @Mock
+    private SecurityContextHelper securityContextHelper;
+
     @InjectMocks
     private ModelRegistryService modelRegistryService;
 
+    @BeforeEach
+    void setUpAuthz() {
+        when(securityContextHelper.getCurrentUser()).thenReturn("alice");
+        when(securityContextHelper.tagsToMap(any(), any(), any())).thenReturn(Map.of());
+        when(securityContextHelper.canRead(any(), any(), any(), any())).thenReturn(true);
+    }
+
+    private RegisteredModel existingModel(String name) {
+        return RegisteredModel.builder().name(name).latestVersions(Collections.emptyList()).build();
+    }
+
     @Test
     public void testCreateRegisteredModel() throws IOException {
-        String name = "test-model";
-        modelRegistryService.createRegisteredModel(name);
-        verify(modelRegistryRepository, times(1)).createRegisteredModel(name);
+        modelRegistryService.createRegisteredModel("test-model");
+        verify(modelRegistryRepository, times(1)).createRegisteredModel("test-model");
     }
 
     @Test
     public void testCreateModelVersion() throws IOException {
-        String name = "test-model";
-        RegisteredModel model = RegisteredModel.builder().name(name).latestVersions(Collections.emptyList()).build();
-        when(modelRegistryRepository.getRegisteredModel(name)).thenReturn(model);
-        
-        ModelVersion version = modelRegistryService.createModelVersion(name, "source", "run123");
-        
+        when(modelRegistryRepository.getRegisteredModel("test-model")).thenReturn(existingModel("test-model"));
+
+        ModelVersion version = modelRegistryService.createModelVersion("test-model", "source", "run123");
+
         assertEquals("1", version.getVersion());
         assertEquals("None", version.getCurrentStage());
         verify(modelRegistryRepository, times(1)).createModelVersion(any(ModelVersion.class));
@@ -47,16 +65,14 @@ public class ModelRegistryServiceTest {
 
     @Test
     public void testTransitionModelVersionStage() throws IOException {
-        String name = "test-model";
-        String version = "1";
-        ModelVersion mvProduction = ModelVersion.builder().name(name).version(version).currentStage("Production").build();
-        
-        when(modelRegistryRepository.getModelVersion(name, version)).thenReturn(mvProduction);
+        ModelVersion mvProduction = ModelVersion.builder().name("test-model").version("1").currentStage("Production").build();
+        when(modelRegistryRepository.getRegisteredModel("test-model")).thenReturn(existingModel("test-model"));
+        when(modelRegistryRepository.getModelVersion("test-model", "1")).thenReturn(mvProduction);
 
-        ModelVersion result = modelRegistryService.transitionModelVersionStage(name, version, "Production", false);
-        
+        ModelVersion result = modelRegistryService.transitionModelVersionStage("test-model", "1", "Production", false);
+
         assertEquals("Production", result.getCurrentStage());
-        verify(modelRegistryRepository).updateModelVersionStage(name, version, "Production");
+        verify(modelRegistryRepository).updateModelVersionStage("test-model", "1", "Production");
     }
 
     @Test
@@ -65,13 +81,15 @@ public class ModelRegistryServiceTest {
         RegisteredModel m2 = RegisteredModel.builder().name("model2").build();
         when(modelRegistryRepository.listRegisteredModels()).thenReturn(List.of(m1, m2));
 
-        java.util.List<RegisteredModel> results = modelRegistryService.searchRegisteredModels("name LIKE 'model1%'");
+        List<RegisteredModel> results = modelRegistryService.searchRegisteredModels("name LIKE 'model1%'");
         assertEquals(1, results.size());
         assertEquals("model1", results.get(0).getName());
     }
 
     @Test
     public void testUpdateDeleteRegisteredModel() throws IOException {
+        when(modelRegistryRepository.getRegisteredModel("m1")).thenReturn(existingModel("m1"));
+
         modelRegistryService.updateRegisteredModel("m1", "desc");
         verify(modelRegistryRepository).updateRegisteredModel("m1", "desc");
 
@@ -81,6 +99,8 @@ public class ModelRegistryServiceTest {
 
     @Test
     public void testUpdateDeleteModelVersion() throws IOException {
+        when(modelRegistryRepository.getRegisteredModel("m1")).thenReturn(existingModel("m1"));
+
         modelRegistryService.updateModelVersion("m1", "1", "desc");
         verify(modelRegistryRepository).updateModelVersion("m1", "1", "desc");
 
@@ -90,6 +110,8 @@ public class ModelRegistryServiceTest {
 
     @Test
     public void testModelTags() throws IOException {
+        when(modelRegistryRepository.getRegisteredModel("m1")).thenReturn(existingModel("m1"));
+
         modelRegistryService.setRegisteredModelTag("m1", "k", "v");
         verify(modelRegistryRepository).setRegisteredModelTag("m1", "k", "v");
 

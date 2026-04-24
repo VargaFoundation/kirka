@@ -141,6 +141,19 @@
 			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
 			<version>2.3.0</version>
 		</dependency>
+
+		<!-- Structured JSON logging (activated by the `prod` profile via logback-spring.xml) -->
+		<dependency>
+			<groupId>net.logstash.logback</groupId>
+			<artifactId>logstash-logback-encoder</artifactId>
+			<version>7.4</version>
+		</dependency>
+
+		<!-- Spring AOP for the RepositoryTimingAspect -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-aop</artifactId>
+		</dependency>
 		
 		<!-- Spring Security -->
 		<dependency>

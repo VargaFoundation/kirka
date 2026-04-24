@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Kirka logging configuration.
+
+  * Default / `dev` profile  : human-readable pattern with request_id in brackets.
+  * `prod` profile           : JSON lines via logstash-logback-encoder, ready to be
+                               picked up by ELK, Loki, Grafana Cloud Logs, Splunk, etc.
+
+  Pick the profile via `-Dspring.profiles.active=prod` or `SPRING_PROFILES_ACTIVE=prod`.
+  Common MDC keys set by MdcCorrelationFilter are always forwarded to the encoder.
+-->
+<configuration>
+    <springProperty name="applicationName" source="spring.application.name" defaultValue="kirka"/>
+
+    <!-- Human-readable console (dev / default) -->
+    <springProfile name="!prod">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss} [%thread] [%X{request_id:-}] %-5level %logger{36} - %msg%n</pattern>
+            </encoder>
+        </appender>
+    </springProfile>
+
+    <!-- Structured JSON for production. One line per event, stable field names. -->
+    <springProfile name="prod">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+                <includeMdcKeyName>request_id</includeMdcKeyName>
+                <customFields>{"application":"${applicationName}"}</customFields>
+                <timestampPattern>yyyy-MM-dd'T'HH:mm:ss.SSSXXX</timestampPattern>
+                <fieldNames>
+                    <timestamp>@timestamp</timestamp>
+                    <message>message</message>
+                    <thread>thread</thread>
+                    <logger>logger</logger>
+                    <level>level</level>
+                    <levelValue>[ignore]</levelValue>
+                    <stackTrace>stack_trace</stackTrace>
+                </fieldNames>
+            </encoder>
+        </appender>
+    </springProfile>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+
+    <!-- Kirka's own namespace defaults to INFO; developers can bump to DEBUG via properties. -->
+    <logger name="varga.kirka" level="INFO"/>
+    <!-- Chatty HBase/ZK RPC retries get trimmed down in production. -->
+    <logger name="org.apache.zookeeper" level="WARN"/>
+    <logger name="org.apache.hadoop.hbase.client" level="WARN"/>
+</configuration>

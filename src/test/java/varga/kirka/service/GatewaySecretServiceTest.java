@@ -6,14 +6,18 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import varga.kirka.model.AuthConfigEntry;
 import varga.kirka.model.GatewaySecretInfo;
 import varga.kirka.model.SecretValueEntry;
 import varga.kirka.repo.GatewaySecretRepository;
+import varga.kirka.security.SecurityContextHelper;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -21,37 +25,55 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 public class GatewaySecretServiceTest {
 
     @Mock
     private GatewaySecretRepository gatewaySecretRepository;
 
+    @Mock
+    private SecurityContextHelper securityContextHelper;
+
     @InjectMocks
     private GatewaySecretService gatewaySecretService;
 
     @BeforeEach
-    public void setUp() {
+    void setUpAuthz() {
+        when(securityContextHelper.getCurrentUser()).thenReturn("alice");
+        when(securityContextHelper.tagsToMap(any(), any(), any())).thenReturn(Map.of());
+        when(securityContextHelper.canRead(any(), any(), any(), any())).thenReturn(true);
+    }
+
+    private GatewaySecretInfo existingSecret(String id, String name) {
+        return GatewaySecretInfo.builder()
+                .secretId(id)
+                .secretName(name)
+                .provider("openai")
+                .createdBy("alice")
+                .createdAt(System.currentTimeMillis())
+                .lastUpdatedAt(System.currentTimeMillis())
+                .maskedValues(new ArrayList<>())
+                .build();
     }
 
     @Test
     public void testCreateSecret() throws IOException {
-        String name = "test-secret";
+        // The service records the caller from the security context; override the default stub
+        // so the assertions describe the returned DTO explicitly.
+        when(securityContextHelper.getCurrentUser()).thenReturn("user1");
+
         List<SecretValueEntry> values = List.of(
-                SecretValueEntry.builder().key("api_key").value("secret123").build()
-        );
-        String provider = "openai";
-        String createdBy = "user1";
+                SecretValueEntry.builder().key("api_key").value("secret123").build());
 
-        doNothing().when(gatewaySecretRepository).saveSecret(any(), any());
-
-        GatewaySecretInfo result = gatewaySecretService.createSecret(name, values, provider, null, createdBy);
+        GatewaySecretInfo result = gatewaySecretService.createSecret(
+                "test-secret", values, "openai", null, "user1");
 
         assertNotNull(result);
         assertNotNull(result.getSecretId());
-        assertEquals(name, result.getSecretName());
-        assertEquals(provider, result.getProvider());
-        assertEquals(createdBy, result.getCreatedBy());
-        assertEquals(createdBy, result.getLastUpdatedBy());
+        assertEquals("test-secret", result.getSecretName());
+        assertEquals("openai", result.getProvider());
+        assertEquals("user1", result.getCreatedBy());
+        assertEquals("user1", result.getLastUpdatedBy());
         assertNotNull(result.getMaskedValues());
         assertEquals(1, result.getMaskedValues().size());
         assertEquals("api_key", result.getMaskedValues().get(0).getKey());
@@ -61,19 +83,13 @@ public class GatewaySecretServiceTest {
 
     @Test
     public void testCreateSecretWithAuthConfig() throws IOException {
-        String name = "test-secret";
         List<SecretValueEntry> values = List.of(
-                SecretValueEntry.builder().key("api_key").value("secret123").build()
-        );
+                SecretValueEntry.builder().key("api_key").value("secret123").build());
         List<AuthConfigEntry> authConfig = List.of(
-                AuthConfigEntry.builder().key("auth_type").value("bearer").build()
-        );
-        String provider = "openai";
-        String createdBy = "user1";
+                AuthConfigEntry.builder().key("auth_type").value("bearer").build());
 
-        doNothing().when(gatewaySecretRepository).saveSecret(any(), any());
-
-        GatewaySecretInfo result = gatewaySecretService.createSecret(name, values, provider, authConfig, createdBy);
+        GatewaySecretInfo result = gatewaySecretService.createSecret(
+                "test-secret", values, "openai", authConfig, "user1");
 
         assertNotNull(result);
         assertNotNull(result.getAuthConfig());
@@ -82,39 +98,20 @@ public class GatewaySecretServiceTest {
 
     @Test
     public void testCreateSecretWithNullValues() throws IOException {
-        String name = "test-secret";
-        String provider = "openai";
-        String createdBy = "user1";
-
-        doNothing().when(gatewaySecretRepository).saveSecret(any(), any());
-
-        GatewaySecretInfo result = gatewaySecretService.createSecret(name, null, provider, null, createdBy);
-
+        GatewaySecretInfo result = gatewaySecretService.createSecret(
+                "test-secret", null, "openai", null, "user1");
         assertNotNull(result);
         assertTrue(result.getMaskedValues().isEmpty());
     }
 
     @Test
     public void testUpdateSecret() throws IOException {
-        String secretId = "secret-123";
-        GatewaySecretInfo existing = GatewaySecretInfo.builder()
-                .secretId(secretId)
-                .secretName("test-secret")
-                .provider("openai")
-                .createdBy("user1")
-                .createdAt(System.currentTimeMillis())
-                .lastUpdatedAt(System.currentTimeMillis())
-                .maskedValues(new ArrayList<>())
-                .build();
-
-        when(gatewaySecretRepository.getSecretById(secretId)).thenReturn(existing);
-        doNothing().when(gatewaySecretRepository).saveSecret(any(), any());
+        when(gatewaySecretRepository.getSecretById("secret-123")).thenReturn(existingSecret("secret-123", "test-secret"));
 
         List<SecretValueEntry> newValues = List.of(
                 SecretValueEntry.builder().key("api_key").value("newsecret456").build(),
-                SecretValueEntry.builder().key("api_secret").value("anothersecret").build()
-        );
-        GatewaySecretInfo updated = gatewaySecretService.updateSecret(secretId, newValues, null, "user2");
+                SecretValueEntry.builder().key("api_secret").value("anothersecret").build());
+        GatewaySecretInfo updated = gatewaySecretService.updateSecret("secret-123", newValues, null, "user2");
 
         assertNotNull(updated);
         assertEquals("user2", updated.getLastUpdatedBy());
@@ -123,25 +120,12 @@ public class GatewaySecretServiceTest {
 
     @Test
     public void testUpdateSecretAuthConfig() throws IOException {
-        String secretId = "secret-123";
-        GatewaySecretInfo existing = GatewaySecretInfo.builder()
-                .secretId(secretId)
-                .secretName("test-secret")
-                .provider("openai")
-                .createdBy("user1")
-                .createdAt(System.currentTimeMillis())
-                .lastUpdatedAt(System.currentTimeMillis())
-                .maskedValues(new ArrayList<>())
-                .build();
-
-        when(gatewaySecretRepository.getSecretById(secretId)).thenReturn(existing);
-        when(gatewaySecretRepository.getSecretValues(secretId)).thenReturn(null);
-        doNothing().when(gatewaySecretRepository).saveSecret(any(), any());
+        when(gatewaySecretRepository.getSecretById("secret-123")).thenReturn(existingSecret("secret-123", "test-secret"));
+        when(gatewaySecretRepository.getSecretValues("secret-123")).thenReturn(null);
 
         List<AuthConfigEntry> authConfig = List.of(
-                AuthConfigEntry.builder().key("auth_type").value("bearer").build()
-        );
-        GatewaySecretInfo updated = gatewaySecretService.updateSecret(secretId, null, authConfig, "user2");
+                AuthConfigEntry.builder().key("auth_type").value("bearer").build());
+        GatewaySecretInfo updated = gatewaySecretService.updateSecret("secret-123", null, authConfig, "user2");
 
         assertNotNull(updated);
         assertNotNull(updated.getAuthConfig());
@@ -151,51 +135,33 @@ public class GatewaySecretServiceTest {
     @Test
     public void testUpdateSecretNotFound() throws IOException {
         when(gatewaySecretRepository.getSecretById("nonexistent-id")).thenReturn(null);
-
-        assertThrows(RuntimeException.class, () -> {
-            gatewaySecretService.updateSecret("nonexistent-id", null, null, "user1");
-        });
+        assertThrows(RuntimeException.class, () ->
+                gatewaySecretService.updateSecret("nonexistent-id", null, null, "user1"));
     }
 
     @Test
     public void testDeleteSecret() throws IOException {
-        doNothing().when(gatewaySecretRepository).deleteSecret(anyString());
-
+        when(gatewaySecretRepository.getSecretById("secret-123")).thenReturn(existingSecret("secret-123", "test-secret"));
         gatewaySecretService.deleteSecret("secret-123");
-
         verify(gatewaySecretRepository).deleteSecret("secret-123");
     }
 
     @Test
     public void testGetSecretById() throws IOException {
-        String secretId = "secret-123";
-        GatewaySecretInfo expected = GatewaySecretInfo.builder()
-                .secretId(secretId)
-                .secretName("test-secret")
-                .build();
-
-        when(gatewaySecretRepository.getSecretById(secretId)).thenReturn(expected);
-
-        GatewaySecretInfo result = gatewaySecretService.getSecret(secretId, null);
-
+        when(gatewaySecretRepository.getSecretById("secret-123"))
+                .thenReturn(existingSecret("secret-123", "test-secret"));
+        GatewaySecretInfo result = gatewaySecretService.getSecret("secret-123", null);
         assertNotNull(result);
-        assertEquals(secretId, result.getSecretId());
+        assertEquals("secret-123", result.getSecretId());
     }
 
     @Test
     public void testGetSecretByName() throws IOException {
-        String name = "unique-secret-name";
-        GatewaySecretInfo expected = GatewaySecretInfo.builder()
-                .secretId("secret-123")
-                .secretName(name)
-                .build();
-
-        when(gatewaySecretRepository.getSecretByName(name)).thenReturn(expected);
-
-        GatewaySecretInfo result = gatewaySecretService.getSecret(null, name);
-
+        when(gatewaySecretRepository.getSecretByName("unique-secret-name"))
+                .thenReturn(existingSecret("secret-123", "unique-secret-name"));
+        GatewaySecretInfo result = gatewaySecretService.getSecret(null, "unique-secret-name");
         assertNotNull(result);
-        assertEquals(name, result.getSecretName());
+        assertEquals("unique-secret-name", result.getSecretName());
     }
 
     @Test
@@ -203,52 +169,40 @@ public class GatewaySecretServiceTest {
         when(gatewaySecretRepository.getSecretById("nonexistent-id")).thenReturn(null);
         when(gatewaySecretRepository.getSecretByName("nonexistent-name")).thenReturn(null);
 
-        GatewaySecretInfo result = gatewaySecretService.getSecret("nonexistent-id", null);
-        assertNull(result);
-
-        result = gatewaySecretService.getSecret(null, "nonexistent-name");
-        assertNull(result);
+        // After the stabilization pass the service raises a typed error instead of returning null.
+        assertThrows(ResourceNotFoundException.class,
+                () -> gatewaySecretService.getSecret("nonexistent-id", null));
+        assertThrows(ResourceNotFoundException.class,
+                () -> gatewaySecretService.getSecret(null, "nonexistent-name"));
     }
 
     @Test
     public void testListSecrets() throws IOException {
         List<GatewaySecretInfo> secrets = List.of(
-                GatewaySecretInfo.builder().secretId("1").secretName("secret1").provider("openai").build(),
-                GatewaySecretInfo.builder().secretId("2").secretName("secret2").provider("anthropic").build(),
-                GatewaySecretInfo.builder().secretId("3").secretName("secret3").provider("openai").build()
-        );
-
+                existingSecret("1", "secret1"),
+                existingSecret("2", "secret2"),
+                existingSecret("3", "secret3"));
         when(gatewaySecretRepository.listSecrets(null)).thenReturn(secrets);
-
-        List<GatewaySecretInfo> allSecrets = gatewaySecretService.listSecrets(null);
-        assertEquals(3, allSecrets.size());
+        assertEquals(3, gatewaySecretService.listSecrets(null).size());
     }
 
     @Test
     public void testListSecretsFilterByProvider() throws IOException {
         List<GatewaySecretInfo> openaiSecrets = List.of(
-                GatewaySecretInfo.builder().secretId("1").secretName("secret1").provider("openai").build(),
-                GatewaySecretInfo.builder().secretId("3").secretName("secret3").provider("openai").build()
-        );
-        List<GatewaySecretInfo> anthropicSecrets = List.of(
-                GatewaySecretInfo.builder().secretId("2").secretName("secret2").provider("anthropic").build()
-        );
+                existingSecret("1", "secret1"),
+                existingSecret("3", "secret3"));
+        List<GatewaySecretInfo> anthropicSecrets = List.of(existingSecret("2", "secret2"));
 
         when(gatewaySecretRepository.listSecrets("openai")).thenReturn(openaiSecrets);
         when(gatewaySecretRepository.listSecrets("anthropic")).thenReturn(anthropicSecrets);
 
-        List<GatewaySecretInfo> resultOpenai = gatewaySecretService.listSecrets("openai");
-        assertEquals(2, resultOpenai.size());
-
-        List<GatewaySecretInfo> resultAnthropic = gatewaySecretService.listSecrets("anthropic");
-        assertEquals(1, resultAnthropic.size());
+        assertEquals(2, gatewaySecretService.listSecrets("openai").size());
+        assertEquals(1, gatewaySecretService.listSecrets("anthropic").size());
     }
 
     @Test
     public void testListSecretsEmpty() throws IOException {
         when(gatewaySecretRepository.listSecrets(null)).thenReturn(new ArrayList<>());
-
-        List<GatewaySecretInfo> results = gatewaySecretService.listSecrets(null);
-        assertTrue(results.isEmpty());
+        assertTrue(gatewaySecretService.listSecrets(null).isEmpty());
     }
 }
