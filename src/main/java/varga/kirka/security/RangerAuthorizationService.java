@@ -47,11 +47,12 @@ public class RangerAuthorizationService implements AuthorizationService {
         log.info("Initializing Ranger authorization service for service={} admin={} cacheDir={}",
                 rangerServiceName, rangerAdminUrl, policyCacheDir);
         try {
-            // Ranger reads its connection details from ranger-<appId>-security.xml on the
-            // classpath (src/main/resources/ranger/ranger-kirka-security.xml). The admin URL
-            // and cache directory recorded here are for logs only — the source of truth is
-            // the XML file.
-            rangerPlugin = new RangerPluginWrapper(rangerServiceName, rangerServiceName);
+            // The XML at src/main/resources/ranger/ranger-kirka-security.xml is shipped under
+            // BOOT-INF/classes/ranger/ in the fat-jar, which the Ranger resource-loader does not
+            // see (it scans the classpath root only). Pass the connection settings to the wrapper
+            // explicitly so it can inject them into RangerPluginConfig before plugin.init().
+            rangerPlugin = new RangerPluginWrapper(
+                    rangerServiceName, rangerServiceName, rangerAdminUrl, policyCacheDir);
             rangerPlugin.init();
             if (!rangerPlugin.isInitialized()) {
                 log.warn("Ranger plugin failed to initialise; falling back to owner-only authorization");

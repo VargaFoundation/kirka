@@ -138,7 +138,7 @@ class AuthorizationServiceTest {
         // stub-based implementation granted admins/public-tagged resources silently, which made
         // it impossible to tell real Ranger policies from stubbed heuristics. The real wrapper
         // now defers entirely to RangerBasePlugin, so unconfigured instances deny.
-        RangerPluginWrapper wrapper = new RangerPluginWrapper("kirka", "kirka");
+        RangerPluginWrapper wrapper = new RangerPluginWrapper("kirka", "kirka", null, null);
 
         assertFalse(wrapper.isInitialized(), "A wrapper without init() must not claim to be ready");
         assertFalse(wrapper.isAccessAllowed(RangerAccessRequest.create(
@@ -151,7 +151,7 @@ class AuthorizationServiceTest {
     void testRangerPluginWrapper_initAttemptIsIdempotentOnFailure() {
         // Without a reachable Ranger Admin the init call is expected to fail gracefully and
         // leave the wrapper marked as uninitialised, so callers can fall back to owner-only.
-        RangerPluginWrapper wrapper = new RangerPluginWrapper("kirka", "kirka");
+        RangerPluginWrapper wrapper = new RangerPluginWrapper("kirka", "kirka", null, null);
         try {
             wrapper.init();
         } catch (Throwable t) {

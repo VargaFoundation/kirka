@@ -31,35 +31,56 @@ public class RangerPluginWrapper {
 
     private final String serviceType;
     private final String appId;
+    private final String policyRestUrl;
+    private final String policyCacheDir;
 
     private RangerBasePlugin plugin;
     private boolean initialized;
 
-    public RangerPluginWrapper(String serviceType, String appId) {
+    public RangerPluginWrapper(String serviceType, String appId, String policyRestUrl, String policyCacheDir) {
         this.serviceType = serviceType;
         this.appId = appId;
+        this.policyRestUrl = policyRestUrl;
+        this.policyCacheDir = policyCacheDir;
     }
 
     /**
      * Initialises the Ranger plugin. Must be called before any {@link #isAccessAllowed} call.
      * On failure the wrapper stays uninitialised and subsequent checks deny by default.
+     *
+     * <p>Critical Ranger config keys are injected programmatically rather than read from an
+     * XML resource on the classpath. The Ranger client looks for {@code ranger-<svc>-security.xml}
+     * at the classpath root, but a Spring Boot fat-jar serves resources under
+     * {@code BOOT-INF/classes/...} — a path the Ranger resource-loader does not consult. Without
+     * the override, {@code policy.rest.url} resolves to {@code null} and {@code RangerRESTClient}
+     * crashes on {@code Random.nextInt(0)} because the URL list is empty.
      */
     public void init() {
-        log.info("Initialising Ranger plugin: serviceType={}, appId={}", serviceType, appId);
+        log.info("Initialising Ranger plugin: serviceType={}, appId={}, restUrl={}",
+                serviceType, appId, policyRestUrl);
         try {
-            RangerBasePlugin newPlugin = new RangerBasePlugin(serviceType, appId);
+            // Use the 3-arg constructor (serviceType, serviceName, appId) — the 2-arg variant
+            // passes serviceName=null to RangerPluginConfig, which later trips a NPE inside
+            // RangerAdminRESTClient.init when it URL-encodes the service name.
+            RangerBasePlugin newPlugin = new RangerBasePlugin(serviceType, serviceType, appId);
+            String prefix = "ranger.plugin." + serviceType;
+            if (policyRestUrl != null && !policyRestUrl.isBlank()) {
+                newPlugin.getConfig().set(prefix + ".policy.rest.url", policyRestUrl);
+            }
+            if (policyCacheDir != null && !policyCacheDir.isBlank()) {
+                newPlugin.getConfig().set(prefix + ".policy.cache.dir", policyCacheDir);
+            }
             newPlugin.init();
             newPlugin.setResultProcessor(new RangerDefaultAuditHandler());
             this.plugin = newPlugin;
             this.initialized = true;
             log.info("Ranger plugin initialised successfully (service={}, cacheDir={})",
-                    newPlugin.getConfig().get("ranger.plugin." + serviceType + ".policy.cache.dir"),
-                    serviceType);
+                    serviceType,
+                    newPlugin.getConfig().get(prefix + ".policy.cache.dir"));
         } catch (Throwable t) {
             this.initialized = false;
             this.plugin = null;
-            log.error("Failed to initialise Ranger plugin; authorization will fall back to owner-only checks. "
-                    + "Error: {}", t.toString());
+            log.error("Failed to initialise Ranger plugin; authorization will fall back to owner-only checks", t);
         }
     }
 
